@@ -4,6 +4,8 @@
 #include <stdlib.h>
 
 #define CMD_BUFFER_SIZE 1024
+#define ESC 27
+#define ESCAPE 34
 
 struct BaseCell;
 
@@ -79,11 +81,8 @@ void init_machine(void) {
 void stop_machine(void) {
   struct BaseCell *current = secd_machine.bottom;
   struct BaseCell *next = secd_machine.bottom->next;
-  int count = 0;
 
   while(current != NULL) {
-    printf("stop %d\n", count);
-
     free(current);
     current = NULL;
 
@@ -91,7 +90,6 @@ void stop_machine(void) {
       current = next;
       next = next->next;
     }
-    count++;
   }
 }
 
@@ -107,11 +105,36 @@ void debug_stack(void) {
   }
 }
 
+void run(void) {
+  int not_stop = 1;
+  char command[CMD_BUFFER_SIZE];
+  memset(command, 0, CMD_BUFFER_SIZE);
+
+  while(not_stop) {
+    printf(")> ");
+    /* Required on Windows. */
+    fflush(stdout);
+    fgets(command, CMD_BUFFER_SIZE, stdin); 
+
+    if(command[0] == ESC) {
+      // Up   27 91 65
+      // Down 27 91 66
+      printf("\n");
+    }
+    else if(command[0] != '\n') {
+      printf("cmd: %s ok\n", command);
+    }
+    else {
+      not_stop = 0;
+      printf("done\n");
+    }
+  }
+}
+
 int main(void) {
   init_machine();
-  nil();
-  ldc(3);
-  debug_stack();
+  run();
+  printf("%d\n", '\"');
   stop_machine();
   return 1;
 }
