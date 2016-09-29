@@ -251,7 +251,7 @@ void debug_stack(void) {
     printf("top is nil\n");
   }
   else if(secd_machine.s->type == INTEGER) {
-    printf("top is integer %d\n", secd_machine.s->content.integer);
+    printf("top is integer %" PRId64 "\n", secd_machine.s->content.integer);
   }
   else if(secd_machine.s->type == ATOM) {
     printf("top is atom %s\n", secd_machine.s->content.string);
@@ -272,7 +272,7 @@ void debug_code(void) {
       printf("nil:nil ");
     }
     else if(cell->type == INTEGER) {
-      printf("%d:integer ", cell->content.integer);
+      printf("%" PRId64 ":integer ", cell->content.integer);
     }
     else if(cell->type == ATOM) {
       printf("%s:atom ", cell->content.string);
@@ -299,7 +299,7 @@ void debug_top_code(void) {
     printf("nil:nil ");
   }
   else if(cell->type == INTEGER) {
-    printf("%d:integer ", cell->content.integer);
+    printf("%" PRId64 ":integer ", cell->content.integer);
   }
   else if(cell->type == ATOM) {
     printf("%s:atom ", cell->content.string);
@@ -456,7 +456,7 @@ void run_code(void) {
       drop_integer(current);
     }
     else if(current->type == INTEGER) {
-      printf("[Error]:%s is integer\n", current->content.integer);
+      printf("[Error]:%" PRId64 " is integer\n", current->content.integer);
       drop_integer(current);
     }
     else if(current->type == LIST) {

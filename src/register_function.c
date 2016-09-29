@@ -1,4 +1,3 @@
-#include <inttypes.h>
 #include "secd_struct.h"
 #include "secd_machine.h"
 
@@ -48,11 +47,11 @@ void add(void) {
   if(second == NULL) {
     drop_cell(first);
     drop_cell(second);
-    return SECD_MACHINE_NS(error)("first argument is null");
+    return SECD_MACHINE_NS(error)("second argument is null");
   }
   b = S64(second->content.string);
 
-  printf("%d + %d = %d\n", a, b, a + b);
+  printf("%" PRId64 " + %" PRId64 " = %" PRId64 "\n", a, b, a + b);
   return ldc(a + b);
 }
 

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #define SECD_STATUS_NS(name) SECD_STATUS_##name
 
