@@ -1,6 +1,6 @@
 APP = secd
 CODE = src/register_function.c src/secd_machine.c
-CC = gcc
+CC = clang -Wall -g
 
 BUILD_DIR = bin
 
