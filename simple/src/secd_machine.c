@@ -203,7 +203,7 @@ void free_stack(struct BaseCell *current) {
   struct BaseCell *next = NULL;
 
   if(current != NULL) {
-    current->next;
+    next = current->next;
   }
 
   while(current != NULL) {
@@ -331,7 +331,7 @@ void debug_env(void) {
 
 void run(void) {
   enum StopType status = CONTINUE;
-  int8_t next = 0;
+  int16_t next = 0;
   char command[CMD_BUFFER_SIZE];
   char exit_command[5];
   memset(command, 0, CMD_BUFFER_SIZE);

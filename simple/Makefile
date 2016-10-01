@@ -4,9 +4,12 @@ CC = clang -Wall -g
 
 BUILD_DIR = bin
 
-.PHONY: $(APP)
+.PHONY: $(APP) clean
 $(APP): $(BUILD_DIR)
 	$(CC) -o $(BUILD_DIR)/$(APP) $(CODE)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
+
+clean:
+	cd ../simple && rm -r ./bin/*
