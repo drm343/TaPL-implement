@@ -26,7 +26,7 @@ struct BaseCell *new_nil(void) {
   return cell;
 }
 
-struct BaseCell *new_interger(int64_t integer) {
+struct BaseCell *new_integer(int64_t integer) {
   struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
   cell->type = INTEGER;
   cell->content.integer = integer;
@@ -188,7 +188,7 @@ bool compile_integer(char *atom_string, int16_t atom_size) {
     }
   }
 
-  struct BaseCell *cell = new_interger(count);
+  struct BaseCell *cell = new_integer(count);
   set_code_next(cell);
   return true;
 }
@@ -202,7 +202,7 @@ void compile_function(char *atom_string, void (*func)(void)) {
 
 // user command
 void ldc(int64_t integer) {
-  struct BaseCell *cell = new_interger(integer);
+  struct BaseCell *cell = new_integer(integer);
   set_stack_next(cell);
 }
 
