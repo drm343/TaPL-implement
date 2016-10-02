@@ -493,7 +493,7 @@ void add_function(char *name, int16_t name_size, void (*func)(void)) {
   compile_function(atom_string, func);
 }
 
-void find_function(char *func) {
+bool find_function(char *func) {
   struct BaseCell *current = secd_machine.env_bottom->next;
   struct BaseList *item = NULL;
   struct BaseCell *car = NULL;
@@ -506,32 +506,42 @@ void find_function(char *func) {
     
     if(!strcmp(car->content.string, func)) {
       cdr->content.func();
-      break;
+      return true;
     }
 
     current = current->next;
   }
+  return false;
 }
 
-void run_integer(struct BaseCell *cell, char *error_msg) {
+bool run_integer(struct BaseCell *cell, char *error_msg) {
   if(cell == NULL) {
-    return SECD_MACHINE_NS(error)("no value");
+    SECD_MACHINE_NS(error)("no value");
+    return false;
   }
   else if(cell->type == ATOM) {
-    find_function(cell->content.string);
-    drop_atom(cell);
+    if(find_function(cell->content.string)) {
+      drop_atom(cell);
+      return false;
+    }
+    else {
+      set_stack_next(cell);
+    }
   }
   else if(cell->type == NIL) {
     drop_integer(cell);
-    return SECD_MACHINE_NS(error)(error_msg);
+    SECD_MACHINE_NS(error)(error_msg);
+    return false;
   }
   else if(cell->type == INTEGER) {
     set_stack_next(cell);
   }
   else if(cell->type == LIST) {
     drop_list(cell);
-    return SECD_MACHINE_NS(error)(error_msg);
+    SECD_MACHINE_NS(error)(error_msg);
+    return false;
   }
+  return true;
 }
 
 void run_code(void) {

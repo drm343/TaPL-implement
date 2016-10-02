@@ -23,6 +23,6 @@ void SECD_MACHINE_NS(recover_machine)(void);
 void stop_machine(void);
 void debug_stack(void);
 void debug_code(void);
-void run_integer(struct BaseCell *, char *);
+bool run_integer(struct BaseCell *, char *);
 void run(void);
-void find_function(char *);
+bool find_function(char *);
