@@ -1,25 +1,8 @@
 #include "secd_struct.h"
 #include "secd_machine.h"
 
-#define ADD_FUNCTION(name, func) add_function(name, sizeof(name) - 1, func);
+#define ADD_FUNCTION(name, func) add_function(name, sizeof(name), func);
 
-
-int64_t S64(const char *s) {
-  int64_t i;
-  char c ;
-  int scanned = sscanf(s, "%" SCNd64 "%c", &i, &c);
-
-  if (scanned == 1) {
-    return i;
-  }
-
-  if (scanned > 1) {
-    // TBD about extra data found
-    return i;
-  }
-  // TBD failed to scan;  
-  return 0;  
-}
 
 // primitive code
 void hello(void) {
@@ -32,27 +15,31 @@ void nil(void) {
 }
 
 void add(void) {
-  struct BaseCell *first = pop_code_next();
-  struct BaseCell *second = pop_code_next();
   int64_t a = 0;
   int64_t b = 0;
 
-  if(first == NULL) {
-    drop_cell(first);
-    drop_cell(second);
-    return SECD_MACHINE_NS(error)("first argument is null");
-  }
-  a = S64(first->content.string);
+  struct BaseCell *first = pop_code_next();
+  run_integer(first, "first argument is null");
 
-  if(second == NULL) {
-    drop_cell(first);
-    drop_cell(second);
-    return SECD_MACHINE_NS(error)("second argument is null");
-  }
-  b = S64(second->content.string);
+  struct BaseCell *second = pop_code_next();
+  run_integer(second, "second argument is null");
+
+  second = pop_stack_next();
+  first = pop_stack_next();
+
+  a = first->content.integer;
+  b = second->content.integer;
+
+  drop_cell(first);
+  drop_cell(second);
 
   printf("%" PRId64 " + %" PRId64 " = %" PRId64 "\n", a, b, a + b);
   return ldc(a + b);
+}
+
+void debug(void) {
+  debug_code();
+  debug_stack();
 }
 
 // main code
@@ -60,6 +47,7 @@ void register_function(void) {
   ADD_FUNCTION("nil", nil);
   ADD_FUNCTION("hello", hello);
   ADD_FUNCTION("add", add);
+  ADD_FUNCTION("debug", debug);
 }
 
 int main(void) {

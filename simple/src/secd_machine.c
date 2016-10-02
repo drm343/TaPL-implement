@@ -5,6 +5,9 @@
 #define ESC 27
 #define ESCAPE 34
 #define SPACE (int)' '
+#define ASCII_0 48
+#define ASCII_9 57
+
 
 #define DEBUG 1
 struct SECD secd_machine;
@@ -64,8 +67,14 @@ void clean_code(void) {
 }
 
 void set_stack_next(struct BaseCell *cell) {
-  secd_machine.s->next = cell;
-  secd_machine.s = cell;
+  if(secd_machine.bottom == NULL) {
+    secd_machine.bottom = cell;
+    secd_machine.s = cell;
+  }
+  else {
+    cell->next = secd_machine.s;
+    secd_machine.s = cell;
+  }
 }
 
 void set_code_next(struct BaseCell *cell) {
@@ -88,6 +97,22 @@ struct BaseCell *pop_code_next(void) {
     }
 
     secd_machine.c = cell->next;
+    cell->next = NULL;
+  }
+  return cell;
+}
+
+struct BaseCell *pop_stack_next(void) {
+  struct BaseCell *cell = secd_machine.s;
+  
+  if(cell != NULL) {
+    if(cell->next == NULL) {
+      secd_machine.s = NULL;
+      secd_machine.bottom  = NULL;
+    }
+    else {
+      secd_machine.s = cell->next;
+    }
     cell->next = NULL;
   }
   return cell;
@@ -146,15 +171,26 @@ void drop_cell(struct BaseCell *cell) {
   }
 }
 
-// user command
-void ldc(int64_t integer) {
-  struct BaseCell *cell = new_interger(integer);
-  set_stack_next(cell);
-}
-
 void compile_atom(char *atom_string) {
   struct BaseCell *cell = new_atom(atom_string);
   set_code_next(cell);
+}
+
+bool compile_integer(char *atom_string, int16_t atom_size) {
+  int64_t count = 0;
+
+  for(int16_t i = 0; i < atom_size; i++) {
+    if((atom_string[i] >= ASCII_0) && (atom_string[i] <= ASCII_9)) {
+      count = count * 10 + (atom_string[i] - ASCII_0);
+    }
+    else {
+      return false;
+    }
+  }
+
+  struct BaseCell *cell = new_interger(count);
+  set_code_next(cell);
+  return true;
 }
 
 void compile_function(char *atom_string, void (*func)(void)) {
@@ -164,17 +200,22 @@ void compile_function(char *atom_string, void (*func)(void)) {
   set_env_next(cell);
 }
 
+// user command
+void ldc(int64_t integer) {
+  struct BaseCell *cell = new_interger(integer);
+  set_stack_next(cell);
+}
+
 // machine command
 void init_machine(void) {
-  struct BaseCell *cell = new_nil();
-  secd_machine.s = cell;
-  secd_machine.bottom  = cell;
+  secd_machine.s = NULL;
+  secd_machine.bottom = NULL;
 
   secd_machine.c_bottom = NULL;
   secd_machine.c = NULL;
   secd_machine.tmp_code = (char*)malloc(sizeof(char) * CMD_BUFFER_SIZE);
 
-  cell = new_nil();
+  struct BaseCell *cell = new_nil();
   secd_machine.env = cell;
   secd_machine.env_bottom = cell;
 
@@ -227,6 +268,8 @@ void free_stack(struct BaseCell *current) {
 void SECD_MACHINE_NS(error)(char *msg) {
   printf("%s\n", msg);
   secd_machine.status = SECD_STATUS_NS(ERROR);
+
+  clean_code();
 }
 
 void SECD_MACHINE_NS(recover_machine)(void) {
@@ -245,28 +288,36 @@ void stop_machine(void) {
   free(secd_machine.tmp_code);
 }
 
-void debug_stack(void) {
-#ifdef DEBUG
-  if(secd_machine.s->type == NIL) {
-    printf("top is nil\n");
-  }
-  else if(secd_machine.s->type == INTEGER) {
-    printf("top is integer %" PRId64 "\n", secd_machine.s->content.integer);
-  }
-  else if(secd_machine.s->type == ATOM) {
-    printf("top is atom %s\n", secd_machine.s->content.string);
-  }
-  else {
-    printf("top is other\n");
-  }
-#endif
-}
-
 void debug_code(void) {
 #ifdef DEBUG
   struct BaseCell *cell = secd_machine.c;
 
   printf("[all code]: ");
+  while(cell != NULL) {
+    if(cell->type == NIL) {
+      printf("nil:nil ");
+    }
+    else if(cell->type == INTEGER) {
+      printf("%" PRId64 ":integer ", cell->content.integer);
+    }
+    else if(cell->type == ATOM) {
+      printf("%s:atom ", cell->content.string);
+    }
+    else {
+      printf("undef:bottom ");
+    }
+
+    cell = cell->next;
+  }
+  printf("\n");
+#endif
+}
+
+void debug_stack(void) {
+#ifdef DEBUG
+  struct BaseCell *cell = secd_machine.bottom;
+
+  printf("[all stack]: ");
   while(cell != NULL) {
     if(cell->type == NIL) {
       printf("nil:nil ");
@@ -308,6 +359,23 @@ void debug_top_code(void) {
     printf("undef:bottom ");
   }
   printf("\n");
+#endif
+}
+
+void debug_top_stack(void) {
+#ifdef DEBUG
+  if(secd_machine.s->type == NIL) {
+    printf("top is nil\n");
+  }
+  else if(secd_machine.s->type == INTEGER) {
+    printf("top is integer %" PRId64 "\n", secd_machine.s->content.integer);
+  }
+  else if(secd_machine.s->type == ATOM) {
+    printf("top is atom %s\n", secd_machine.s->content.string);
+  }
+  else {
+    printf("top is other\n");
+  }
 #endif
 }
 
@@ -392,7 +460,13 @@ void normal_mode(int16_t next) {
       if(counter >= 1) {
         atom_string = new_string(counter);
         strncpy(atom_string, command, counter);
-        compile_atom(atom_string);
+
+        if (!compile_integer(atom_string, counter)) {
+          compile_atom(atom_string);
+        }
+        else {
+          free(atom_string);
+        }
       }
       command += counter + 1;
       counter = 0;
@@ -439,12 +513,33 @@ void find_function(char *func) {
   }
 }
 
+void run_integer(struct BaseCell *cell, char *error_msg) {
+  if(cell == NULL) {
+    return SECD_MACHINE_NS(error)("no value");
+  }
+  else if(cell->type == ATOM) {
+    find_function(cell->content.string);
+    drop_atom(cell);
+  }
+  else if(cell->type == NIL) {
+    drop_integer(cell);
+    return SECD_MACHINE_NS(error)(error_msg);
+  }
+  else if(cell->type == INTEGER) {
+    set_stack_next(cell);
+  }
+  else if(cell->type == LIST) {
+    drop_list(cell);
+    return SECD_MACHINE_NS(error)(error_msg);
+  }
+}
+
 void run_code(void) {
   debug_code();
-
+  debug_stack();
   struct BaseCell *current = pop_code_next();
 
-  while(current != NULL) {
+  while((current != NULL) && (secd_machine.status != SECD_STATUS_NS(ERROR))) {
     if(current->type == ATOM) {
       if(secd_machine.status == SECD_STATUS_NS(CONTINUE)) {
         find_function(current->content.string);
