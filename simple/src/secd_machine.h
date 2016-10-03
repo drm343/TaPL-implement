@@ -16,7 +16,7 @@ void drop_cell(struct BaseCell *);
 void ldc(int64_t);
 
 // machine command
-void add_function(char *, int16_t, void (*)(void));
+void add_primitive(char *, int16_t, void (*)(void));
 void init_machine(void);
 void SECD_MACHINE_NS(error)(char *);
 void SECD_MACHINE_NS(recover_machine)(void);

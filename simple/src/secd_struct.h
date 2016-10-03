@@ -8,6 +8,18 @@
 #include <inttypes.h>
 
 #define SECD_STATUS_NS(name) SECD_STATUS_##name
+#define PRIMITIVE_NS(name) PRIMITIVE_##name
+
+// compile type
+enum COMPILE_PRIMITIVE {
+  PRIMITIVE_NS(start) = 0,
+  PRIMITIVE_NS(find_type_start),
+  PRIMITIVE_NS(skip_space),
+  PRIMITIVE_NS(input_type),
+  PRIMITIVE_NS(return_type),
+  PRIMITIVE_NS(find_type_stop),
+  PRIMITIVE_NS(end)
+};
 
 // machine type
 struct BaseCell;
@@ -22,6 +34,7 @@ enum Type {
   INTEGER,
   ATOM,
   FUNC,
+  TYPE,
   LIST
 };
 

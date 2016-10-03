@@ -1,7 +1,11 @@
 #include "secd_struct.h"
 #include "secd_machine.h"
 
-#define ADD_FUNCTION(name, func) add_function(name, sizeof(name), func);
+#define ADD_FUNCTION(name, func) add_primitive(name, sizeof(name), func);
+#define RUN_INTEGER(cell, msg) \
+  if (!run_integer(cell, msg)) {\
+    return;\
+  }
 
 
 // primitive code
@@ -43,12 +47,16 @@ void add(void) {
   int64_t b = 0;
 
   struct BaseCell *first = pop_code_next();
+  RUN_INTEGER(first, "first argument is not exist");
+    /*
   if (!run_integer(first, "first argument is null")) {
     return;
   }
+  */
 
   struct BaseCell *second = pop_code_next();
-  if (!run_integer(second, "second argument is null")) {
+  if (!run_integer(second, "second argument is not exist")) {
+    drop_cell(pop_stack_next());
     return;
   }
 
@@ -62,7 +70,8 @@ void add(void) {
   drop_cell(second);
 
   printf("%" PRId64 " + %" PRId64 " = %" PRId64 "\n", a, b, a + b);
-  return ldc(a + b);
+  ldc(a + b);
+  return;
 }
 
 void debug(void) {
@@ -72,11 +81,13 @@ void debug(void) {
 
 // main code
 void register_function(void) {
-  ADD_FUNCTION("nil", nil);
-  ADD_FUNCTION("atom?", is_atom);
-  ADD_FUNCTION("hello", hello);
-  ADD_FUNCTION("add", add);
-  ADD_FUNCTION("debug", debug);
+  ADD_FUNCTION("nil: [ -> bottom! ]", nil);
+  ADD_FUNCTION("atom?: [ any! -> bool! ]", is_atom);
+  ADD_FUNCTION("hello: [ -> bottom! ]", hello);
+  ADD_FUNCTION("add: [ int! int! -> int! ]", add);
+  ADD_FUNCTION("debug: [ -> bottom! ]", debug);
+  /*
+  */
 }
 
 int main(void) {
