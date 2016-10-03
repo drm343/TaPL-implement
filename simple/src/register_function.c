@@ -22,7 +22,8 @@ void is_atom(void) {
   struct BaseCell *cell = pop_code_next();
 
   if(cell == NULL) {
-    return SECD_MACHINE_NS(error)("no value");
+    SECD_MACHINE_NS(error)("no value");
+    return;
   }
   else if(cell->type == ATOM) {
     printf("%s is atom\n", cell->content.string);
@@ -30,15 +31,18 @@ void is_atom(void) {
   }
   else if(cell->type == NIL) {
     drop_integer(cell);
-    return SECD_MACHINE_NS(error)("not atom");
+    SECD_MACHINE_NS(error)("not atom");
+    return;
   }
   else if(cell->type == INTEGER) {
     drop_integer(cell);
-    return SECD_MACHINE_NS(error)("not atom");
+    SECD_MACHINE_NS(error)("not atom");
+    return;
   }
   else if(cell->type == LIST) {
     drop_list(cell);
-    return SECD_MACHINE_NS(error)("not atom");
+    SECD_MACHINE_NS(error)("not atom");
+    return;
   }
 }
 
@@ -89,6 +93,10 @@ void register_function(void) {
 }
 
 int main(void) {
+#ifdef DEBUG
+  setenv("MALLOC_TRACE", "./memleak.log", 1);
+  mtrace();
+#endif
   init_machine();
   register_function();
   run();

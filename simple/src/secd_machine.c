@@ -8,8 +8,6 @@
 #define ASCII_0 48
 #define ASCII_9 57
 
-
-#define DEBUG 1
 struct SECD secd_machine;
 
 void run_code(void);
@@ -19,12 +17,12 @@ void free_stack(struct BaseCell *);
 // kernel command
 char *new_string(int16_t input_size) {
   if (input_size > 0) {
-    char * result = (char *)malloc(sizeof(char) * input_size);
+    char *result = (char *)malloc(1 + sizeof(char) * input_size);
     if(result == NULL) {
       return result;
     }
     else {
-      memset(result, 0, input_size);
+      result[input_size] = '\0';
       return result;
     }
   }
@@ -367,7 +365,7 @@ void init_machine(void) {
 
   secd_machine.code_bottom = NULL;
   secd_machine.code = NULL;
-  secd_machine.tmp_code = (char*)malloc(sizeof(char) * CMD_BUFFER_SIZE);
+  secd_machine.tmp_code = new_string(CMD_BUFFER_SIZE);
 
   secd_machine.env = NULL;
   secd_machine.env_bottom = NULL;
@@ -554,7 +552,6 @@ void debug_env(void) {
   struct BaseCell *cdr = list->cdr;
 
   printf("func %s\n", car->content.string);
-  printf("func %p\n", cdr->content.func);
 
   if(cdr->content.func == NULL) {
     printf("[error]: not func\n");
