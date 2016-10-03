@@ -25,4 +25,3 @@ void debug_stack(void);
 void debug_code(void);
 bool run_integer(struct BaseCell *, char *);
 void run(void);
-bool find_function(char *);

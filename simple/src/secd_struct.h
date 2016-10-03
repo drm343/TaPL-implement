@@ -33,6 +33,7 @@ enum Type {
   NIL = 0,
   INTEGER,
   ATOM,
+  UNCHECK_FUNC,
   FUNC,
   TYPE,
   LIST
@@ -60,8 +61,8 @@ enum SECD_STATUS {
 struct SECD {
   struct BaseCell *s;
   struct BaseCell *bottom;
-  struct BaseCell *c;
-  struct BaseCell *c_bottom;
+  struct BaseCell *code;
+  struct BaseCell *code_bottom;
   char *tmp_code;
   struct BaseCell *env;
   struct BaseCell *env_bottom;

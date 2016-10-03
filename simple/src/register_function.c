@@ -86,8 +86,6 @@ void register_function(void) {
   ADD_FUNCTION("hello: [ -> bottom! ]", hello);
   ADD_FUNCTION("add: [ int! int! -> int! ]", add);
   ADD_FUNCTION("debug: [ -> bottom! ]", debug);
-  /*
-  */
 }
 
 int main(void) {

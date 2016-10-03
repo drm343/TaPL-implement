@@ -12,7 +12,6 @@
 #define DEBUG 1
 struct SECD secd_machine;
 
-void compile_code(int16_t, char *);
 void run_code(void);
 void free_list(struct BaseList *);
 void free_stack(struct BaseCell *);
@@ -32,6 +31,24 @@ char *new_string(int16_t input_size) {
   else {
     return NULL;
   }
+}
+
+struct BaseCell *lookup_env(char *func) {
+  struct BaseCell *current = secd_machine.env;
+  struct BaseList *item = NULL;
+  struct BaseCell *car = NULL;
+
+  while(current != NULL) {
+    item = current->content.list;
+    car = item->car;
+    
+    if(!strcmp(car->content.string, func)) {
+      break;
+    }
+
+    current = current->next;
+  }
+  return current;
 }
 
 struct BaseCell *new_nil(void) {
@@ -74,6 +91,18 @@ struct BaseCell *new_function(void (*func)(void)) {
   return cell;
 }
 
+struct BaseCell *new_uncheck_function(struct BaseCell *name, struct BaseCell *func) {
+  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
+  pair->car = name;
+  pair->cdr = func;
+
+  cell->type = UNCHECK_FUNC;
+  cell->content.list = pair;
+  cell->next = NULL;
+  return cell;
+}
+
 struct BaseCell *new_list(struct BaseCell *car, struct BaseCell *cdr) {
   struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
   struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
@@ -87,7 +116,12 @@ struct BaseCell *new_list(struct BaseCell *car, struct BaseCell *cdr) {
 }
 
 void clean_code(void) {
-  secd_machine.c = secd_machine.c_bottom;
+  struct BaseCell *cell = pop_code_next();
+
+  while(cell != NULL) {
+    drop_cell(cell);
+    cell = pop_code_next();
+  }
 }
 
 void set_stack_next(struct BaseCell *cell) {
@@ -102,14 +136,17 @@ void set_stack_next(struct BaseCell *cell) {
 }
 
 void set_code_next(struct BaseCell *cell) {
-  if(secd_machine.c == NULL) {
-    secd_machine.c = cell;
+  if(secd_machine.code_bottom == NULL) {
+    secd_machine.code_bottom = cell;
   }
 
-  if(secd_machine.c_bottom != NULL) {
-    secd_machine.c_bottom->next = cell;
+  if(secd_machine.code != NULL) {
+    secd_machine.code->next = cell;
   }
-  secd_machine.c_bottom = cell;
+  else {
+    secd_machine.code = cell;
+  }
+  secd_machine.code = cell;
 }
 
 void set_env_next(struct BaseCell *cell) {
@@ -127,14 +164,14 @@ void set_env_next(struct BaseCell *cell) {
 }
 
 struct BaseCell *pop_code_next(void) {
-  struct BaseCell *cell = secd_machine.c;
+  struct BaseCell *cell = secd_machine.code_bottom;
   
   if(cell != NULL) {
     if(cell->next == NULL) {
-      secd_machine.c_bottom = NULL;
+      secd_machine.code = NULL;
     }
 
-    secd_machine.c = cell->next;
+    secd_machine.code_bottom = cell->next;
     cell->next = NULL;
   }
   return cell;
@@ -209,31 +246,112 @@ void compile_atom(char *atom_string) {
   set_code_next(cell);
 }
 
-bool compile_integer(char *atom_string, int16_t atom_size) {
+struct BaseCell *compile_integer(struct BaseCell *cell) {
+  size_t atom_size = strlen(cell->content.string);
+  char *atom_string = cell->content.string;
   int64_t count = 0;
 
-  for(int16_t i = 0; i < atom_size; i++) {
+  for(size_t i = 0; i < atom_size; i++) {
     if((atom_string[i] >= ASCII_0) && (atom_string[i] <= ASCII_9)) {
       count = count * 10 + (atom_string[i] - ASCII_0);
     }
     else {
-      return false;
+      return cell;
     }
   }
 
-  struct BaseCell *cell = new_integer(count);
-  set_code_next(cell);
-  return true;
+  drop_cell(cell);
+  struct BaseCell *new_cell = new_integer(count);
+  return new_cell;
 }
 
-void compile_function(char *atom_string, void (*func)(void)) {
-  struct BaseCell *name_cell = new_atom(atom_string);
-  struct BaseCell *func_cell = new_function(func);
-  struct BaseCell *cell = new_list(name_cell, func_cell);
-  set_env_next(cell);
+struct BaseCell *compile_function(struct BaseCell *cell) {
+  struct BaseCell *result = lookup_env(cell->content.string);
+
+  if(result != NULL) {
+    return new_uncheck_function(cell, result);
+  }
+  else {
+    return cell;
+  }
 }
 
-void compile_primitive(char *func_string, void (*func)(void)) {
+void tokenize_pass(void) {
+  char *command = secd_machine.tmp_code;
+  int16_t counter = 0;
+  int16_t next = 0;
+
+  while(next < CMD_BUFFER_SIZE) {
+    if(((int)secd_machine.tmp_code[next]) == SPACE) {
+      if(counter >= 1) {
+        char *atom_string = new_string(counter + 1);
+        strncpy(atom_string, command, counter);
+        compile_atom(atom_string);
+      }
+      command += counter + 1;
+      counter = 0;
+      next++;
+    }
+    else {
+      next++;
+      counter++;
+    }
+  }
+}
+
+void set_type_integer_pass(void) {
+  struct BaseCell *current = pop_code_next();
+  struct BaseCell *tmp = NULL;
+  struct BaseCell *tmp_bottom = NULL;
+
+  while(current != NULL) {
+    if(current->type == ATOM) {
+      current = compile_integer(current);
+    }
+
+    if(tmp != NULL) {
+      tmp->next = current;
+    }
+
+    if(tmp_bottom == NULL) {
+      tmp_bottom = current;
+    }
+    tmp = current;
+    current = pop_code_next();
+  }
+  secd_machine.code_bottom = tmp_bottom;
+}
+
+void set_function_pass(void) {
+  struct BaseCell *current = pop_code_next();
+  struct BaseCell *tmp = NULL;
+  struct BaseCell *tmp_bottom = NULL;
+
+  while(current != NULL) {
+    if(current->type == ATOM) {
+      current = compile_function(current);
+    }
+
+    if(tmp != NULL) {
+      tmp->next = current;
+    }
+
+    if(tmp_bottom == NULL) {
+      tmp_bottom = current;
+    }
+    tmp = current;
+    current = pop_code_next();
+  }
+  secd_machine.code_bottom = tmp_bottom;
+}
+
+void compile_code(int16_t input_size, char *command) {
+  memset(secd_machine.tmp_code, ' ', CMD_BUFFER_SIZE);
+  strncpy(secd_machine.tmp_code, command, input_size);
+
+  tokenize_pass();
+  set_type_integer_pass();
+  set_function_pass();
 }
 
 // user command
@@ -247,8 +365,8 @@ void init_machine(void) {
   secd_machine.s = NULL;
   secd_machine.bottom = NULL;
 
-  secd_machine.c_bottom = NULL;
-  secd_machine.c = NULL;
+  secd_machine.code_bottom = NULL;
+  secd_machine.code = NULL;
   secd_machine.tmp_code = (char*)malloc(sizeof(char) * CMD_BUFFER_SIZE);
 
   secd_machine.env = NULL;
@@ -275,6 +393,13 @@ void free_list(struct BaseList *current) {
   free_stack(cdr);
 }
 
+void free_uncheck_function(struct BaseList *current) {
+  struct BaseCell *car = current->car;
+
+  free(current);
+  free_stack(car);
+}
+
 void free_stack(struct BaseCell *current) {
   struct BaseCell *next = NULL;
 
@@ -288,6 +413,9 @@ void free_stack(struct BaseCell *current) {
     }
     else if(current->type == LIST) {
       free_list(current->content.list);
+    }
+    else if(current->type == UNCHECK_FUNC) {
+      free_uncheck_function(current->content.list);
     }
 
     free(current);
@@ -313,7 +441,7 @@ void SECD_MACHINE_NS(recover_machine)(void) {
 
 void stop_machine(void) {
   free_stack(secd_machine.bottom);
-  free_stack(secd_machine.c);
+  free_stack(secd_machine.code_bottom);
   free_stack(secd_machine.env);
 
   free_stack(secd_machine.atom_pool);
@@ -325,7 +453,7 @@ void stop_machine(void) {
 
 void debug_code(void) {
 #ifdef DEBUG
-  struct BaseCell *cell = secd_machine.c;
+  struct BaseCell *cell = secd_machine.code_bottom;
 
   printf("[all code]: ");
   while(cell != NULL) {
@@ -337,6 +465,11 @@ void debug_code(void) {
     }
     else if(cell->type == ATOM) {
       printf("%s:atom ", cell->content.string);
+    }
+    else if(cell->type == UNCHECK_FUNC) {
+      struct BaseList *list = cell->content.list;
+      struct BaseCell *func = list->car;
+      printf("%s:func ", func->content.string);
     }
     else {
       printf("undef:bottom ");
@@ -375,7 +508,7 @@ void debug_stack(void) {
 
 void debug_top_code(void) {
 #ifdef DEBUG
-  struct BaseCell *cell = secd_machine.c;
+  struct BaseCell *cell = secd_machine.code;
 
   printf("[top code]: ");
   if(cell == NULL) {
@@ -473,38 +606,6 @@ void run(void) {
     }
     compile_code(next, command);
     run_code();
-  }
-}
-
-void compile_code(int16_t input_size, char *command) {
-  memset(secd_machine.tmp_code, ' ', CMD_BUFFER_SIZE);
-  strncpy(secd_machine.tmp_code, command, input_size);
-
-  char *atom_string = NULL;
-  int16_t counter = 0;
-  int16_t next = 0;
-
-  while(next < CMD_BUFFER_SIZE) {
-    if(((int)secd_machine.tmp_code[next]) == SPACE) {
-      if(counter >= 1) {
-        atom_string = new_string(counter + 1);
-        strncpy(atom_string, command, counter);
-
-        if (!compile_integer(atom_string, counter)) {
-          compile_atom(atom_string);
-        }
-        else {
-          free(atom_string);
-        }
-      }
-      command += counter + 1;
-      counter = 0;
-      next++;
-    }
-    else {
-      next++;
-      counter++;
-    }
   }
 }
 
@@ -641,27 +742,21 @@ void add_primitive(char *func_string, int16_t name_size, void (*func)(void)) {
   set_env_next(cell);
 }
 
-bool find_function(char *func) {
-  struct BaseCell *current = secd_machine.env;
+void run_unckeck_function(struct BaseCell *cell) {
   struct BaseList *item = NULL;
   struct BaseCell *car = NULL;
   struct BaseCell *cdr = NULL;
 
-  while(current != NULL) {
-    item = current->content.list;
-    car = item->car;
-    cdr = item->cdr;
+  item = cell->content.list;
+  car = item->car;
+  cdr = item->cdr;
     
-    if(!strcmp(car->content.string, func)) {
-      item = cdr->content.list;
-      cdr = item->cdr;
-      cdr->content.func();
-      return true;
-    }
+  item = cdr->content.list;
+  cdr = item->cdr;
 
-    current = current->next;
-  }
-  return false;
+  item = cdr->content.list;
+  cdr = item->cdr;
+  cdr->content.func();
 }
 
 bool run_integer(struct BaseCell *cell, char *error_msg) {
@@ -669,11 +764,16 @@ bool run_integer(struct BaseCell *cell, char *error_msg) {
     SECD_MACHINE_NS(error)(error_msg);
     return false;
   }
-  else if(cell->type == ATOM) {
-    if(!find_function(cell->content.string)) {
-      drop_atom(cell);
-      return false;
+  else if(cell->type == UNCHECK_FUNC) {
+    if(secd_machine.status == SECD_STATUS_NS(CONTINUE)) {
+      run_unckeck_function(cell);
     }
+    drop_cell(cell);
+  }
+  else if(cell->type == ATOM) {
+    drop_atom(cell);
+    SECD_MACHINE_NS(error)("not integer");
+    return false;
   }
   else if(cell->type == NIL) {
     drop_integer(cell);
@@ -709,11 +809,11 @@ void run_code(void) {
     debug_code();
     debug_stack();
 #endif
-    if(current->type == ATOM) {
+    if(current->type == UNCHECK_FUNC) {
       if(secd_machine.status == SECD_STATUS_NS(CONTINUE)) {
-        find_function(current->content.string);
+        run_unckeck_function(current);
       }
-      drop_atom(current);
+      drop_cell(current);
     }
     else if(current->type == NIL) {
       printf("[Error]:nil\n");
