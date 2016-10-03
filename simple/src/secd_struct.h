@@ -94,5 +94,7 @@ enum StopType {
   TOO_MORE
 };
 
+extern struct SECD secd_machine;
+
 #define SECD_STRUCT 1
 #endif
