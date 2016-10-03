@@ -38,6 +38,7 @@ enum Type {
   INTEGER,
   ATOM,
   UNCHECK_FUNC,
+  DUMP,
   FUNC,
   TYPE,
   LIST
@@ -46,6 +47,7 @@ enum Type {
 union Content {
   int64_t integer;
   struct BaseList *list;
+  struct BaseCell *item;
   char *string;
   void (*func)(void);
 };
@@ -70,6 +72,8 @@ struct SECD {
   char *tmp_code;
   struct BaseCell *env;
   struct BaseCell *env_bottom;
+  struct BaseCell *dump;
+  struct BaseCell *dump_bottom;
 
   struct BaseCell *atom_pool;
   struct BaseCell *atom_pool_top;

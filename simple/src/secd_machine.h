@@ -19,6 +19,7 @@ void ldc(int64_t);
 void add_primitive(char *, int16_t, void (*)(void));
 void init_machine(void);
 void SECD_MACHINE_NS(error)(char *);
+void SECD_MACHINE_NS(type_error)(char *);
 void SECD_MACHINE_NS(recover_machine)(void);
 void stop_machine(void);
 void debug_stack(void);

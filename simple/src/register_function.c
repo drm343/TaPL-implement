@@ -52,11 +52,6 @@ void add(void) {
 
   struct BaseCell *first = pop_code_next();
   RUN_INTEGER(first, "first argument is not exist");
-    /*
-  if (!run_integer(first, "first argument is null")) {
-    return;
-  }
-  */
 
   struct BaseCell *second = pop_code_next();
   if (!run_integer(second, "second argument is not exist")) {
