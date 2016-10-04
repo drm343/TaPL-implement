@@ -76,6 +76,7 @@ struct BaseCell *new_atom(char *atom_string) {
 
 struct BaseCell *new_type(char *atom_string) {
   struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  memset(cell, ' ', sizeof(struct BaseCell));
   cell->type = TYPE;
   cell->content.string = atom_string;
   cell->next = NULL;
@@ -296,6 +297,12 @@ void drop_cell(struct BaseCell *cell) {
   else if(cell->type == UNCHECK_FUNC) {
     drop_list(cell);
   }
+  else if(cell->type == TYPE) {
+    drop_atom(cell);
+  }
+  else if(cell->type == FUNC) {
+    free_stack(cell);
+  }
 }
 
 void compile_atom(char *atom_string) {
@@ -505,10 +512,8 @@ void check_type_pass(void) {
         }
       }
       else {
-        char *type_error_msg = new_string(30);
-        sprintf(type_error_msg, "except type %s but you give type %s", tmp_type->content.string, return_type->content.string);
-        SECD_MACHINE_NS(type_error)(type_error_msg);
-        free(type_error_msg);
+        printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
+        SECD_MACHINE_NS(type_error)("type error");
       }
     }
     else {
@@ -535,10 +540,8 @@ void check_type_pass(void) {
         tmp_parameter_number--;
       }
       else {
-        char *type_error_msg = new_string(30);
-        sprintf(type_error_msg, "except type %s but you give type %s", tmp_type->content.string, return_type->content.string);
-        SECD_MACHINE_NS(type_error)(type_error_msg);
-        free(type_error_msg);
+        printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
+        SECD_MACHINE_NS(type_error)("type error");
       }
     }
 
