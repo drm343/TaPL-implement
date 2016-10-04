@@ -8,6 +8,7 @@
 #define SPACE (int)' '
 #define ASCII_0 48
 #define ASCII_9 57
+#define STRCMP(x, y) strncmp(x, y, strlen(x))
 
 struct SECD secd_machine;
 
@@ -23,6 +24,7 @@ char *new_string(int16_t input_size) {
       return result;
     }
     else {
+      memset(result, ' ', input_size);
       result[input_size] = '\0';
       return result;
     }
@@ -41,7 +43,7 @@ struct BaseCell *lookup_env(char *func) {
     item = current->content.list;
     car = item->car;
     
-    if(!strcmp(car->content.string, func)) {
+    if(!STRCMP(car->content.string, func)) {
       break;
     }
 
@@ -311,7 +313,7 @@ void compile_atom(char *atom_string) {
 }
 
 struct BaseCell *compile_integer(struct BaseCell *cell) {
-  size_t atom_size = strlen(cell->content.string);
+  size_t atom_size = strlen(cell->content.string) - 1;
   char *atom_string = cell->content.string;
   int64_t count = 0;
 
@@ -488,7 +490,7 @@ void check_type_pass(void) {
           }
         }
       }
-      else if((tmp_type != NULL) && (!strcmp(tmp_type->content.string, return_type->content.string))) {
+      else if((tmp_type != NULL) && (!STRCMP(tmp_type->content.string, return_type->content.string))) {
         drop_cell(tmp_type);
         tmp_parameter_number--;
 
@@ -535,7 +537,7 @@ void check_type_pass(void) {
       tmp_type = pop_stack_next();
       if(tmp_type == NULL) {
       }
-      else if((tmp_type != NULL) && (!strcmp(tmp_type->content.string, check_type))) {
+      else if((tmp_type != NULL) && (!STRCMP(tmp_type->content.string, check_type))) {
         drop_cell(tmp_type);
         tmp_parameter_number--;
       }
