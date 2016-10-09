@@ -1,5 +1,7 @@
 #include "secd_struct.h"
 #include "secd_machine.h"
+#include "secd_debug.h"
+#include "secd_memory.h"
 
 #define ADD_FUNCTION(name, func) add_primitive(name, sizeof(name), func);
 #define RUN_INTEGER(cell, msg) \
@@ -88,10 +90,6 @@ void register_function(void) {
 }
 
 int main(void) {
-#ifdef DEBUG
-  setenv("MALLOC_TRACE", "./memleak.log", 1);
-  mtrace();
-#endif
   init_machine();
   register_function();
   run();

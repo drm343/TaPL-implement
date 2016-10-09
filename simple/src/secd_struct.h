@@ -1,9 +1,5 @@
 #ifndef SECD_STRUCT
 
-#ifdef DEBUG
-#include <mcheck.h>
-#endif
-
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -40,6 +36,7 @@ enum Type {
   UNCHECK_FUNC,
   DUMP,
   FUNC,
+  C_FUNC,
   TYPE,
   LIST
 };

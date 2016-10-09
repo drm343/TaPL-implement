@@ -16,7 +16,9 @@ void debug_code(void) {
     }
     else if(cell->type == UNCHECK_FUNC) {
       struct BaseList *list = cell->content.list;
-      struct BaseCell *func = list->car;
+      struct BaseCell *func = list->cdr;
+      list = func->content.list;
+      func = list->car;
       printf("%s:func! ", func->content.string);
     }
     else if(cell->type == DUMP) {

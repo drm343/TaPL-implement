@@ -1,6 +1,7 @@
 #include "secd_struct.h"
 #include "secd_machine.h"
 #include "secd_debug.h"
+#include "secd_memory.h"
 
 #define CMD_BUFFER_SIZE 1024
 #define ESC 27
@@ -13,25 +14,27 @@
 struct SECD secd_machine;
 
 void run_code(void);
-void free_list(struct BaseList *);
-void free_stack(struct BaseCell *);
 
 // kernel command
-char *new_string(int16_t input_size) {
-  if (input_size > 0) {
-    char *result = (char *)malloc(1 + sizeof(char) * input_size);
-    if(result == NULL) {
-      return result;
-    }
-    else {
-      memset(result, ' ', input_size);
-      result[input_size] = '\0';
-      return result;
-    }
-  }
-  else {
-    return NULL;
-  }
+struct BaseCell *get_function_type(struct BaseCell *current) {
+  struct BaseCell *cell = NULL;
+  struct BaseList *list = current->content.list;
+  cell = list->cdr;
+  list = cell->content.list;
+  cell = list->cdr;
+  list = cell->content.list;
+  cell = list->car;
+  return cell;
+}
+
+struct BaseCell *get_parameter_type(struct BaseCell *current) {
+    struct BaseList *list = current->content.list;
+    return list->car;
+}
+
+struct BaseCell *get_return_type(struct BaseCell *current) {
+    struct BaseList *list = current->content.list;
+    return list->cdr;
 }
 
 struct BaseCell *lookup_env(char *func) {
@@ -52,96 +55,12 @@ struct BaseCell *lookup_env(char *func) {
   return current;
 }
 
-struct BaseCell *new_nil(void) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  cell->type = NIL;
-  cell->content.integer = 0;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_integer(int64_t integer) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  cell->type = INTEGER;
-  cell->content.integer = integer;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_atom(char *atom_string) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  cell->type = ATOM;
-  cell->content.string = atom_string;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_type(char *atom_string) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  memset(cell, ' ', sizeof(struct BaseCell));
-  cell->type = TYPE;
-  cell->content.string = atom_string;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_function(void (*func)(void)) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  cell->type = FUNC;
-  cell->content.func = func;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_uncheck_function(struct BaseCell *name, struct BaseCell *func) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
-  pair->car = name;
-  pair->cdr = func;
-
-  cell->type = UNCHECK_FUNC;
-  cell->content.list = pair;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_dump(struct BaseCell *item) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  cell->type = DUMP;
-  cell->content.item = item;
-  cell->next = NULL;
-  return cell;
-}
-
-struct BaseCell *new_list(struct BaseCell *car, struct BaseCell *cdr) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
-  pair->car = car;
-  pair->cdr = cdr;
-
-  cell->type = LIST;
-  cell->content.list = pair;
-  cell->next = NULL;
-  return cell;
-}
-
 void clean_code(void) {
   struct BaseCell *cell = pop_code_next();
 
   while(cell != NULL) {
     drop_cell(cell);
     cell = pop_code_next();
-  }
-}
-
-void set_stack_next(struct BaseCell *cell) {
-  if(secd_machine.bottom == NULL) {
-    secd_machine.bottom = cell;
-    secd_machine.s = cell;
-  }
-  else {
-    cell->next = secd_machine.s;
-    secd_machine.s = cell;
   }
 }
 
@@ -159,6 +78,18 @@ void set_code_next(struct BaseCell *cell) {
   secd_machine.code = cell;
 }
 
+void set_dump_next(struct BaseCell *origin_cell) {
+  struct BaseCell *cell = new_dump(origin_cell);
+  if(secd_machine.dump_bottom == NULL) {
+    secd_machine.dump_bottom = cell;
+    secd_machine.dump = cell;
+  }
+  else {
+    cell->next = secd_machine.dump;
+    secd_machine.dump = cell;
+  }
+}
+
 void set_env_next(struct BaseCell *cell) {
   if(secd_machine.env_bottom == NULL) {
     secd_machine.env_bottom = cell;
@@ -173,16 +104,83 @@ void set_env_next(struct BaseCell *cell) {
   }
 }
 
-void set_dump_next(struct BaseCell *origin_cell) {
-  struct BaseCell *cell = new_dump(origin_cell);
-  if(secd_machine.dump_bottom == NULL) {
-    secd_machine.dump_bottom = cell;
-    secd_machine.dump = cell;
+void set_stack_next(struct BaseCell *cell) {
+  if(secd_machine.bottom == NULL) {
+    secd_machine.bottom = cell;
+    secd_machine.s = cell;
   }
   else {
-    cell->next = secd_machine.dump;
-    secd_machine.dump = cell;
+    cell->next = secd_machine.s;
+    secd_machine.s = cell;
   }
+}
+
+struct BaseCell *copy_cell(struct BaseCell *cell) {
+  struct BaseCell *new_cell = NULL;
+  struct BaseList *list = NULL;
+  struct BaseCell *car = NULL;
+  struct BaseCell *cdr = NULL;
+  int16_t str_size = 0;
+  char *atom_string = NULL;
+
+  switch(cell->type) {
+    case NIL:
+      new_cell = new_nil();
+      break;
+    case INTEGER:
+      new_cell = new_integer(cell->content.integer);
+      break;
+    case ATOM:
+      str_size = strlen(cell->content.string) - 1;
+      atom_string = new_string(str_size);
+      strncpy(atom_string, cell->content.string, str_size);
+      new_cell = new_atom(atom_string);
+      break;
+    case LIST:
+      list = cell->content.list;
+      car = copy_cell(list->car);
+      cdr = copy_cell(list->cdr);
+      new_cell = new_list(car, cdr);
+      break;
+    case TYPE:
+      str_size = strlen(cell->content.string) - 1;
+      atom_string = new_string(str_size);
+      strncpy(atom_string, cell->content.string, str_size);
+      new_cell = new_type(atom_string);
+      break;
+    case UNCHECK_FUNC:
+      list = cell->content.list;
+      new_cell = copy_cell(list->car);
+      // TODO
+      // DEBUG version
+#ifdef DEBUG
+      new_cell = debug_new_uncheck_function(new_cell, list->cdr);
+#else
+      new_cell = new_uncheck_function(new_cell, list->cdr);
+#endif
+      break;
+    case DUMP:
+      new_cell = copy_cell(cell->content.item);
+      new_cell = new_dump(new_cell);
+      break;
+    case FUNC:
+      list = cell->content.list;
+      car = copy_cell(list->car);
+      new_cell = new_function(car, list->cdr);
+      break;
+    case C_FUNC:
+      new_cell = new_c_function(cell->content.func);
+      break;
+    default:
+      break;
+  };
+
+  return new_cell;
+}
+
+void copy_stack_next(struct BaseCell *cell) {
+  struct BaseCell *new_cell = copy_cell(cell);
+  set_stack_next(new_cell);
 }
 
 struct BaseCell *pop_code_next(void) {
@@ -194,22 +192,6 @@ struct BaseCell *pop_code_next(void) {
     }
 
     secd_machine.code_bottom = cell->next;
-    cell->next = NULL;
-  }
-  return cell;
-}
-
-struct BaseCell *pop_stack_next(void) {
-  struct BaseCell *cell = secd_machine.s;
-  
-  if(cell != NULL) {
-    if(cell->next == NULL) {
-      secd_machine.s = NULL;
-      secd_machine.bottom  = NULL;
-    }
-    else {
-      secd_machine.s = cell->next;
-    }
     cell->next = NULL;
   }
   return cell;
@@ -235,6 +217,22 @@ struct BaseCell *pop_dump_next(void) {
   return item;
 }
 
+struct BaseCell *pop_stack_next(void) {
+  struct BaseCell *cell = secd_machine.s;
+  
+  if(cell != NULL) {
+    if(cell->next == NULL) {
+      secd_machine.s = NULL;
+      secd_machine.bottom  = NULL;
+    }
+    else {
+      secd_machine.s = cell->next;
+    }
+    cell->next = NULL;
+  }
+  return cell;
+}
+
 void dump_stack() {
   set_dump_next(secd_machine.s);
   set_dump_next(secd_machine.bottom);
@@ -245,66 +243,6 @@ void dump_stack() {
 void recover_stack(void) {
   secd_machine.bottom = pop_dump_next();
   secd_machine.s = pop_dump_next();
-}
-
-void drop_atom(struct BaseCell *cell) {
-  if(secd_machine.atom_pool == NULL) {
-    secd_machine.atom_pool = cell;
-    secd_machine.atom_pool_top = cell;
-  }
-  else {
-    secd_machine.atom_pool_top->next = cell;
-    secd_machine.atom_pool_top = cell;
-  }
-}
-
-void drop_integer(struct BaseCell *cell) {
-  if(secd_machine.integer_pool == NULL) {
-    secd_machine.integer_pool = cell;
-    secd_machine.integer_pool_top = cell;
-  }
-  else {
-    secd_machine.integer_pool_top->next = cell;
-    secd_machine.integer_pool_top = cell;
-  }
-}
-
-void drop_list(struct BaseCell *cell) {
-  if(secd_machine.list_pool == NULL) {
-    secd_machine.list_pool = cell;
-    secd_machine.list_pool_top = cell;
-  }
-  else {
-    secd_machine.list_pool_top->next = cell;
-    secd_machine.list_pool_top = cell;
-  }
-}
-
-void drop_cell(struct BaseCell *cell) {
-  if(cell->type == ATOM) {
-    drop_atom(cell);
-  }
-  else if(cell->type == NIL) {
-    drop_integer(cell);
-  }
-  else if(cell->type == INTEGER) {
-    drop_integer(cell);
-  }
-  else if(cell->type == LIST) {
-    drop_list(cell);
-  }
-  else if(cell->type == DUMP) {
-    drop_atom(cell);
-  }
-  else if(cell->type == UNCHECK_FUNC) {
-    drop_list(cell);
-  }
-  else if(cell->type == TYPE) {
-    drop_atom(cell);
-  }
-  else if(cell->type == FUNC) {
-    free_stack(cell);
-  }
 }
 
 void compile_atom(char *atom_string) {
@@ -331,6 +269,18 @@ struct BaseCell *compile_integer(struct BaseCell *cell) {
   return new_cell;
 }
 
+#ifdef DEBUG
+struct BaseCell *compile_unchecked_function(struct BaseCell *cell, int64_t status) {
+  struct BaseCell *result = lookup_env(cell->content.string);
+
+  if(result != NULL) {
+    return new_uncheck_function(cell, result, status);
+  }
+  else {
+    return cell;
+  }
+}
+#else
 struct BaseCell *compile_unchecked_function(struct BaseCell *cell) {
   struct BaseCell *result = lookup_env(cell->content.string);
 
@@ -341,6 +291,7 @@ struct BaseCell *compile_unchecked_function(struct BaseCell *cell) {
     return cell;
   }
 }
+#endif
 
 struct BaseCell *compile_checked_function(struct BaseCell *cell) {
   struct BaseList *list = cell->content.list;
@@ -383,16 +334,18 @@ void turn_integer_pass(void) {
       current = compile_integer(current);
     }
 
-    if(tmp != NULL) {
-      tmp->next = current;
-    }
-
     if(tmp_bottom == NULL) {
       tmp_bottom = current;
+    }
+
+    if(tmp != NULL) {
+      tmp->next = current;
     }
     tmp = current;
     current = pop_code_next();
   }
+
+  secd_machine.code = tmp;
   secd_machine.code_bottom = tmp_bottom;
 }
 
@@ -400,173 +353,192 @@ void turn_function_pass(void) {
   struct BaseCell *current = pop_code_next();
   struct BaseCell *tmp = NULL;
   struct BaseCell *tmp_bottom = NULL;
+#ifdef DEBUG
+  int64_t status = -1;
+#endif
 
   while(current != NULL) {
-    if(current->type == ATOM) {
-      current = compile_unchecked_function(current);
-    }
+#ifdef DEBUG
+    status++;
+#endif
 
-    if(tmp != NULL) {
-      tmp->next = current;
+    if(current->type == ATOM) {
+#ifdef DEBUG
+      current = compile_unchecked_function(current, status);
+#else
+      current = compile_unchecked_function(current);
+#endif
     }
 
     if(tmp_bottom == NULL) {
       tmp_bottom = current;
     }
+
+    if(tmp != NULL) {
+      tmp->next = current;
+    }
     tmp = current;
     current = pop_code_next();
   }
+
+  secd_machine.code = tmp;
   secd_machine.code_bottom = tmp_bottom;
 }
 
-void check_type_pass(void) {
-  int16_t parameter_number = 0;
-  int16_t tmp_parameter_number = 0;
-  int16_t status = 0;
-  char *check_type = NULL;
-  struct BaseCell *current = pop_code_next();
-  struct BaseCell *bottom = NULL;
-  struct BaseCell *top = NULL;
-  struct BaseCell *tmp = NULL;
-  struct BaseCell *tmp_type = NULL;
+void typecheck_function(struct BaseCell *current, int16_t *uncheck_parameter_number, int16_t *dump_function_number) {
+  struct BaseCell *tmp_type = pop_stack_next();
 
-  struct BaseList *list = NULL;
-  struct BaseCell *parameter = NULL;
-  struct BaseCell *return_type = NULL;
-  struct BaseCell *car = NULL;
-  struct BaseCell *cdr = NULL;
+  if((tmp_type == NULL) && ((*dump_function_number) <= 0)) {
+    struct BaseCell *unchecked_type = get_function_type(current);
+    struct BaseCell *parameter = get_parameter_type(unchecked_type);
+    int16_t parameter_number = parameter->content.integer;
+
+    *uncheck_parameter_number = *uncheck_parameter_number - 1;
+    *dump_function_number = *dump_function_number + 1;
+
+    if(parameter_number >= 1) {
+      parameter = parameter->next;
+
+      dump_stack();
+      set_dump_next(new_integer(*uncheck_parameter_number));
+      *uncheck_parameter_number = parameter_number;
+
+      for(;parameter_number > 0; parameter_number--) {
+        copy_stack_next(parameter);
+        parameter = parameter->next;
+      }
+    }
+  }
+  else {
+    struct BaseCell *unchecked_type = get_function_type(current);
+    struct BaseCell *return_type = get_return_type(unchecked_type);
+    struct BaseCell *parameter = get_parameter_type(unchecked_type);
+    int16_t parameter_number = parameter->content.integer;
+
+    if(STRCMP(tmp_type->content.string, return_type->content.string)) {
+      printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
+      SECD_MACHINE_NS(type_error)("type error");
+    }
+    else {
+      *uncheck_parameter_number = *uncheck_parameter_number - 1;
+      *dump_function_number = *dump_function_number + 1;
+
+      if(parameter_number >= 1) {
+        parameter = parameter->next;
+
+        dump_stack();
+        set_dump_next(new_integer(*uncheck_parameter_number));
+        *uncheck_parameter_number = parameter_number;
+
+        for(;parameter_number > 0; parameter_number--) {
+          copy_stack_next(parameter);
+          parameter = parameter->next;
+        }
+      }
+    }
+  }
+}
+
+void typecheck_not_function(char *check_type, int16_t *uncheck_parameter_number) {
+  struct BaseCell *tmp_type = pop_stack_next();
+
+  if(tmp_type == NULL) {
+  }
+  else {
+    *uncheck_parameter_number = *uncheck_parameter_number - 1;
+
+    if(STRCMP(tmp_type->content.string, check_type)) {
+      printf("except type %s but you give type %s\n", tmp_type->content.string, check_type);
+      SECD_MACHINE_NS(type_error)("type error");
+    }
+  }
+}
+
+void check_is_return(int16_t *parameter_number, int16_t *dump_function_number) {
+  if(*parameter_number <= 0) {
+    struct BaseCell *cell = pop_dump_next();
+    *parameter_number = cell->content.integer;
+    recover_stack();
+    drop_integer(cell);
+    *dump_function_number = *dump_function_number - 1;
+  }
+}
+
+void typecheck_pass(void) {
+  struct BaseCell *current = pop_code_next();
+  struct BaseCell *tmp = NULL;
+  struct BaseCell *tmp_bottom = NULL;
+  char *check_type = NULL;
+  int16_t dump_function_number = 0;
+  int16_t parameter_number = 0;
 
   dump_stack();
 
-  while(current != NULL) {
-    if(top == NULL) {
-      bottom = current;
+  while((current != NULL) && (secd_machine.status != SECD_STATUS_NS(ERROR))) {
+#ifdef DEBUG
+    printf("[pass]:%d,%d\n", parameter_number, dump_function_number);
+#endif
+    switch(current->type) {
+      case UNCHECK_FUNC:
+        check_type = "func!";
+        goto FUNC;
+        break;
+      case INTEGER:
+        check_type = "int!";
+        goto ATOM;
+        break;
+      case ATOM:
+        check_type = "atom!";
+        goto ATOM;
+        break;
+      default:
+        check_type = "bottom!";
+        goto ATOM;
+        break;
+    }
+
+FUNC:
+    typecheck_function(current, &parameter_number, &dump_function_number);
+    goto SETUP;
+ATOM:
+    typecheck_not_function(check_type, &parameter_number);
+SETUP:
+    if(secd_machine.status != SECD_STATUS_NS(ERROR)) {
+      while((parameter_number <= 0) && (dump_function_number >= 1)) {
+        check_is_return(&parameter_number, &dump_function_number);
+      }
+
+      if(tmp_bottom == NULL) {
+        tmp_bottom = current;
+      }
+
+      if(tmp != NULL) {
+        tmp->next = current;
+      }
+      tmp = current;
+      current = pop_code_next();
     }
     else {
-      top->next = current;
+      current = NULL;
     }
-    top = current;
-
-    if(current->type == UNCHECK_FUNC) {
-      list = current->content.list;
-      cdr = list->cdr;
-      list = cdr->content.list;
-      cdr = list->cdr;
-      list = cdr->content.list;
-      car = list->car;
-      list = cdr->content.list;
-      car = list->car;
-      list = car->content.list;
-      parameter = list->car;
-      return_type = list->cdr;
-      parameter_number = parameter->content.integer;
-
-      if(parameter_number > 1) {
-        parameter = parameter->next;
-      }
-      else {
-        parameter = NULL;
-      }
-
-      tmp_type = pop_stack_next();
-
-      if(tmp_type == NULL) {
-        if(parameter_number > 0) {
-          dump_stack();
-          set_dump_next(tmp);
-          set_dump_next(new_integer(tmp_parameter_number));
-          tmp = current;
-          tmp_parameter_number = parameter_number;
-          status++;
-
-          for(int16_t i = 0; i < parameter_number; i++) {
-            int16_t size = strlen(parameter->content.string);
-            char *str = new_string(size);
-            strncpy(str, parameter->content.string, size);
-
-            struct BaseCell *type = new_type(str);
-            set_stack_next(type);
-            parameter = parameter->next;
-          }
-        }
-      }
-      else if((tmp_type != NULL) && (!STRCMP(tmp_type->content.string, return_type->content.string))) {
-        drop_cell(tmp_type);
-        tmp_parameter_number--;
-
-        if(parameter_number > 0) {
-          dump_stack();
-          set_dump_next(tmp);
-          set_dump_next(new_integer(tmp_parameter_number));
-          tmp = current;
-          tmp_parameter_number = parameter_number;
-          status++;
-
-          for(int16_t i = 0; i < parameter_number; i++) {
-            int16_t size = strlen(parameter->content.string);
-            char *str = new_string(size);
-            strncpy(str, parameter->content.string, size);
-
-            struct BaseCell *type = new_type(str);
-            set_stack_next(type);
-            parameter = parameter->next;
-          }
-        }
-      }
-      else {
-        printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
-        SECD_MACHINE_NS(type_error)("type error");
-      }
-    }
-    else {
-      switch(current->type) {
-        case NIL:
-          check_type = "nil!";
-          break;
-        case INTEGER:
-          check_type = "int!";
-          break;
-        case ATOM:
-          check_type = "atom!";
-          break;
-        default:
-          check_type = "bottom!";
-          break;
-      }
-
-      tmp_type = pop_stack_next();
-      if(tmp_type == NULL) {
-      }
-      else if((tmp_type != NULL) && (!STRCMP(tmp_type->content.string, check_type))) {
-        drop_cell(tmp_type);
-        tmp_parameter_number--;
-      }
-      else {
-        printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
-        SECD_MACHINE_NS(type_error)("type error");
-      }
-    }
-
-    if((tmp_parameter_number <= 0) && (status > 0)) {
-      status--;
-
-      tmp = pop_dump_next();
-      tmp_parameter_number = tmp->content.integer;
-      drop_cell(tmp);
-      tmp = pop_dump_next();
-
-      recover_stack();
-    }
-    current = pop_code_next();
   }
 
   if(secd_machine.status != SECD_STATUS_NS(ERROR)) {
-    secd_machine.code = top;
-    secd_machine.code_bottom = bottom;
+    secd_machine.code = tmp;
+    secd_machine.code_bottom = tmp_bottom;
+  }
+  else {
+    while((parameter_number >= 1) || (dump_function_number >= 1)) {
+      for(; parameter_number > 0; parameter_number--) {
+        pop_stack_next();
+      }
+      check_is_return(&parameter_number, &dump_function_number);
+    }
   }
 
   recover_stack();
 }
+//#endif
 
 void compile_code(int16_t input_size, char *command) {
   memset(secd_machine.tmp_code, ' ', CMD_BUFFER_SIZE);
@@ -575,7 +547,7 @@ void compile_code(int16_t input_size, char *command) {
   tokenize_pass();
   turn_integer_pass();
   turn_function_pass();
-  check_type_pass();
+  typecheck_pass();
 }
 
 // user command
@@ -609,53 +581,6 @@ void init_machine(void) {
   secd_machine.list_pool_top = NULL;
 
   secd_machine.status = SECD_STATUS_NS(CONTINUE);
-}
-
-void free_list(struct BaseList *current) {
-  struct BaseCell *car = current->car;
-  struct BaseCell *cdr = current->cdr;
-
-  free(current);
-  free_stack(car);
-  free_stack(cdr);
-}
-
-void free_uncheck_function(struct BaseList *current) {
-  struct BaseCell *car = current->car;
-
-  free(current);
-  free_stack(car);
-}
-
-void free_stack(struct BaseCell *current) {
-  struct BaseCell *next = NULL;
-
-  if(current != NULL) {
-    next = current->next;
-  }
-
-  while(current != NULL) {
-    if(current->type == ATOM) {
-      free(current->content.string);
-    }
-    else if(current->type == LIST) {
-      free_list(current->content.list);
-    }
-    else if(current->type == UNCHECK_FUNC) {
-      free_uncheck_function(current->content.list);
-    }
-    else if(current->type == TYPE) {
-      free(current->content.string);
-    }
-
-    free(current);
-    current = NULL;
-
-    if(next != NULL) {
-      current = next;
-      next = next->next;
-    }
-  }
 }
 
 void SECD_MACHINE_NS(error)(char *msg) {
@@ -736,7 +661,7 @@ void add_primitive(char *func_string, int16_t name_size, void (*func)(void)) {
   enum COMPILE_PRIMITIVE status = PRIMITIVE_NS(start);
   struct BaseCell *name_cell = NULL;
   struct BaseCell *type_cell = NULL;
-  struct BaseCell *func_cell = new_function(func);
+  struct BaseCell *func_cell = new_c_function(func);
   struct BaseCell *tmp = NULL;
   struct BaseCell *next = NULL;
   int16_t counter = 0;
@@ -878,7 +803,7 @@ void add_primitive(char *func_string, int16_t name_size, void (*func)(void)) {
     }
   }
 
-  struct BaseCell *cell = new_list(name_cell, new_list(type_cell, func_cell));
+  struct BaseCell *cell = new_function(name_cell, new_list(type_cell, func_cell));
   set_env_next(cell);
 }
 
@@ -891,6 +816,7 @@ void run_uncheck_function(struct BaseCell *cell) {
   car = item->car;
   cdr = item->cdr;
     
+  car = item->car;
   item = cdr->content.list;
   cdr = item->cdr;
 
