@@ -6,6 +6,63 @@ char *debug_new_string(int16_t input_size, char *msg) {
   return new_string(input_size);
 }
 
+void set_pool_next(struct BaseCell *cell) {
+  if(secd_machine.cell_pool == NULL) {
+    secd_machine.cell_pool = cell;
+    secd_machine.cell_pool_top = cell;
+  }
+  else {
+    secd_machine.cell_pool_top->next = cell;
+    secd_machine.cell_pool_top = cell;
+  }
+}
+
+void set_list_next(struct BaseCell *cell) {
+  if(secd_machine.list_pool == NULL) {
+    secd_machine.list_pool = cell;
+    secd_machine.list_pool_top = cell;
+  }
+  else {
+    secd_machine.list_pool_top->next = cell;
+    secd_machine.list_pool_top = cell;
+  }
+}
+
+struct BaseCell *new_cell(void) {
+  if(secd_machine.cell_pool == NULL) {
+    return (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  }
+  else {
+    struct BaseCell *new_cell = secd_machine.cell_pool;
+    secd_machine.cell_pool = new_cell->next;
+    new_cell->next = NULL;
+    return new_cell;
+  }
+}
+
+struct BaseList *new_baselist(void) {
+  if(secd_machine.list_pool == NULL) {
+    return (struct BaseList*)malloc(sizeof(struct BaseList));
+  }
+  else {
+    struct BaseCell *new_cell = secd_machine.list_pool;
+    struct BaseList *new_list = new_cell->content.list;
+
+    new_cell->content.list = NULL;
+
+    if(new_cell->next != NULL) {
+      secd_machine.list_pool = new_cell->next;
+    }
+    else {
+      secd_machine.list_pool = NULL;
+      secd_machine.list_pool_top = NULL;
+    }
+    new_cell->type = NIL;
+    drop_cell(new_cell);
+    return new_list;
+  }
+}
+
 char *new_string(int16_t input_size) {
   if (input_size > 0) {
     char *result = (char *)malloc(1 + sizeof(char) * input_size);
@@ -24,7 +81,7 @@ char *new_string(int16_t input_size) {
 }
 
 struct BaseCell *new_nil(void) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseCell *cell = new_cell();
   cell->type = NIL;
   cell->content.integer = 0;
   cell->next = NULL;
@@ -32,7 +89,7 @@ struct BaseCell *new_nil(void) {
 }
 
 struct BaseCell *new_integer(int64_t integer) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseCell *cell = new_cell();
   cell->type = INTEGER;
   cell->content.integer = integer;
   cell->next = NULL;
@@ -40,7 +97,7 @@ struct BaseCell *new_integer(int64_t integer) {
 }
 
 struct BaseCell *new_atom(char *atom_string) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseCell *cell = new_cell();
   cell->type = ATOM;
   cell->content.string = atom_string;
   cell->next = NULL;
@@ -48,7 +105,7 @@ struct BaseCell *new_atom(char *atom_string) {
 }
 
 struct BaseCell *new_type(char *atom_string) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseCell *cell = new_cell();
   cell->type = TYPE;
   cell->content.string = atom_string;
   cell->next = NULL;
@@ -56,7 +113,7 @@ struct BaseCell *new_type(char *atom_string) {
 }
 
 struct BaseCell *new_c_function(void (*func)(void)) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseCell *cell = new_cell();
   cell->type = C_FUNC;
   cell->content.func = func;
   cell->next = NULL;
@@ -64,8 +121,9 @@ struct BaseCell *new_c_function(void (*func)(void)) {
 }
 
 struct BaseCell *new_function(struct BaseCell *car, struct BaseCell *cdr) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
+  struct BaseCell *cell = new_cell();
+  struct BaseList *pair = new_baselist();
+
   pair->car = car;
   pair->cdr = cdr;
 
@@ -77,8 +135,9 @@ struct BaseCell *new_function(struct BaseCell *car, struct BaseCell *cdr) {
 
 #ifdef DEBUG
 struct BaseCell *new_uncheck_function(struct BaseCell *name, struct BaseCell *func, int64_t status) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
+  struct BaseCell *cell = new_cell();
+  struct BaseList *pair = new_baselist();
+
   pair->car = new_list(name, new_integer(status));
   pair->cdr = func;
 
@@ -89,8 +148,9 @@ struct BaseCell *new_uncheck_function(struct BaseCell *name, struct BaseCell *fu
 }
 
 struct BaseCell *debug_new_uncheck_function(struct BaseCell *name, struct BaseCell *func) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
+  struct BaseCell *cell = new_cell();
+  struct BaseList *pair = new_baselist();
+
   pair->car = name;
   pair->cdr = func;
 
@@ -101,8 +161,9 @@ struct BaseCell *debug_new_uncheck_function(struct BaseCell *name, struct BaseCe
 }
 #else
 struct BaseCell *new_uncheck_function(struct BaseCell *name, struct BaseCell *func) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
+  struct BaseCell *cell = new_cell();
+  struct BaseList *pair = new_baselist();
+
   pair->car = name;
   pair->cdr = func;
 
@@ -114,7 +175,8 @@ struct BaseCell *new_uncheck_function(struct BaseCell *name, struct BaseCell *fu
 #endif
 
 struct BaseCell *new_dump(struct BaseCell *item) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
+  struct BaseCell *cell = new_cell();
+
   cell->type = DUMP;
   cell->content.item = item;
   cell->next = NULL;
@@ -122,8 +184,9 @@ struct BaseCell *new_dump(struct BaseCell *item) {
 }
 
 struct BaseCell *new_list(struct BaseCell *car, struct BaseCell *cdr) {
-  struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  struct BaseList *pair = (struct BaseList*)malloc(sizeof(struct BaseList));
+  struct BaseCell *cell = new_cell();
+  struct BaseList *pair = new_baselist();
+
   pair->car = car;
   pair->cdr = cdr;
 
@@ -184,66 +247,90 @@ void free_stack(struct BaseCell *current) {
   }
 }
 
-// drop memory to machine
 void drop_atom(struct BaseCell *cell) {
-  if(secd_machine.atom_pool == NULL) {
-    secd_machine.atom_pool = cell;
-    secd_machine.atom_pool_top = cell;
-  }
-  else {
-    secd_machine.atom_pool_top->next = cell;
-    secd_machine.atom_pool_top = cell;
-  }
+  free(cell->content.string);
+  cell->content.string = NULL;
+  set_pool_next(cell);
 }
 
 void drop_integer(struct BaseCell *cell) {
-  if(secd_machine.integer_pool == NULL) {
-    secd_machine.integer_pool = cell;
-    secd_machine.integer_pool_top = cell;
-  }
-  else {
-    secd_machine.integer_pool_top->next = cell;
-    secd_machine.integer_pool_top = cell;
-  }
+  set_pool_next(cell);
 }
 
 void drop_list(struct BaseCell *cell) {
-  if(secd_machine.list_pool == NULL) {
-    secd_machine.list_pool = cell;
-    secd_machine.list_pool_top = cell;
-  }
-  else {
-    secd_machine.list_pool_top->next = cell;
-    secd_machine.list_pool_top = cell;
-  }
+  struct BaseCell *car = NULL;
+  struct BaseCell *cdr = NULL;
+  struct BaseList *list = NULL;
+
+  list = cell->content.list;
+
+  car = list->car;
+  cdr = list->cdr;
+
+  list->car = NULL;
+  list->cdr = NULL;
+
+  set_list_next(cell);
+  drop_cell(car);
+  drop_cell(cdr);
 }
 
 void drop_cell(struct BaseCell *cell) {
+  struct BaseCell *car = NULL;
+  struct BaseCell *cdr = NULL;
+  struct BaseList *list = NULL;
+
+  if(cell == NULL) {
+  }
   if(cell->type == ATOM) {
     drop_atom(cell);
   }
   else if(cell->type == NIL) {
-    drop_integer(cell);
+    set_pool_next(cell);
   }
   else if(cell->type == INTEGER) {
-    drop_integer(cell);
+    set_pool_next(cell);
   }
   else if(cell->type == LIST) {
     drop_list(cell);
   }
   else if(cell->type == DUMP) {
-    drop_atom(cell);
+    struct BaseCell *item = cell->content.item;
+
+    cell->content.item = NULL;
+    set_pool_next(cell);
+    drop_cell(item);
   }
   else if(cell->type == UNCHECK_FUNC) {
-    drop_list(cell);
+    list = cell->content.list;
+
+    car = list->car;
+
+    list->car = NULL;
+
+    set_list_next(cell);
+    drop_cell(car);
   }
   else if(cell->type == TYPE) {
-    drop_atom(cell);
+    free(cell->content.string);
+    cell->content.string = NULL;
+    set_pool_next(cell);
   }
   else if(cell->type == FUNC) {
-    drop_list(cell);
+    list = cell->content.list;
+
+    car = list->car;
+    cdr = list->cdr;
+
+    list->car = NULL;
+    list->cdr = NULL;
+
+    set_list_next(cell);
+    drop_cell(car);
+    drop_cell(cdr);
   }
   else if(cell->type == C_FUNC) {
-    free_stack(cell);
+    cell->content.func = NULL;
+    set_pool_next(cell);
   }
 }

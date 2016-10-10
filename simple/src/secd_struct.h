@@ -72,11 +72,8 @@ struct SECD {
   struct BaseCell *dump;
   struct BaseCell *dump_bottom;
 
-  struct BaseCell *atom_pool;
-  struct BaseCell *atom_pool_top;
-
-  struct BaseCell *integer_pool;
-  struct BaseCell *integer_pool_top;
+  struct BaseCell *cell_pool;
+  struct BaseCell *cell_pool_top;
 
   struct BaseCell *list_pool;
   struct BaseCell *list_pool_top;

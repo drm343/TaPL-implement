@@ -213,6 +213,7 @@ struct BaseCell *pop_dump_next(void) {
   }
   item = cell->content.item;
   cell->content.item = NULL;
+  cell->type = NIL;
   drop_cell(cell);
   return item;
 }
@@ -573,11 +574,8 @@ void init_machine(void) {
   secd_machine.dump = NULL;
   secd_machine.dump_bottom = NULL;
 
-  secd_machine.atom_pool = NULL;
-  secd_machine.atom_pool_top = NULL;
-
-  secd_machine.integer_pool = NULL;
-  secd_machine.integer_pool_top = NULL;
+  secd_machine.cell_pool = NULL;
+  secd_machine.cell_pool_top = NULL;
 
   secd_machine.list_pool = NULL;
   secd_machine.list_pool_top = NULL;
@@ -608,8 +606,7 @@ void stop_machine(void) {
   free_stack(secd_machine.code_bottom);
   free_stack(secd_machine.env);
 
-  free_stack(secd_machine.atom_pool);
-  free_stack(secd_machine.integer_pool);
+  free_stack(secd_machine.cell_pool);
   free_stack(secd_machine.list_pool);
 
   free(secd_machine.tmp_code);
@@ -817,8 +814,8 @@ void run_uncheck_function(struct BaseCell *cell) {
   item = cell->content.list;
   car = item->car;
   cdr = item->cdr;
+  item->cdr = NULL;
     
-  car = item->car;
   item = cdr->content.list;
   cdr = item->cdr;
 
