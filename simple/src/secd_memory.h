@@ -1,5 +1,6 @@
 #include "secd_struct.h"
 
+char *debug_new_string(int16_t, char *);
 char *new_string(int16_t);
 struct BaseCell *new_nil(void);
 struct BaseCell *new_integer(int64_t);

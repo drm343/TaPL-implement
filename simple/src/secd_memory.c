@@ -1,6 +1,11 @@
 #include "secd_memory.h"
 
 // get memory from os
+char *debug_new_string(int16_t input_size, char *msg) {
+  printf("%s\n", msg);
+  return new_string(input_size);
+}
+
 char *new_string(int16_t input_size) {
   if (input_size > 0) {
     char *result = (char *)malloc(1 + sizeof(char) * input_size);
@@ -44,7 +49,6 @@ struct BaseCell *new_atom(char *atom_string) {
 
 struct BaseCell *new_type(char *atom_string) {
   struct BaseCell *cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
-  memset(cell, ' ', sizeof(struct BaseCell));
   cell->type = TYPE;
   cell->content.string = atom_string;
   cell->next = NULL;

@@ -143,7 +143,7 @@ struct BaseCell *copy_cell(struct BaseCell *cell) {
       new_cell = new_list(car, cdr);
       break;
     case TYPE:
-      str_size = strlen(cell->content.string) - 1;
+      str_size = strlen(cell->content.string);
       atom_string = new_string(str_size);
       strncpy(atom_string, cell->content.string, str_size);
       new_cell = new_type(atom_string);
@@ -394,9 +394,10 @@ void typecheck_function(struct BaseCell *current, int16_t *uncheck_parameter_num
     int16_t parameter_number = parameter->content.integer;
 
     *uncheck_parameter_number = *uncheck_parameter_number - 1;
-    *dump_function_number = *dump_function_number + 1;
 
     if(parameter_number >= 1) {
+      *dump_function_number = *dump_function_number + 1;
+
       parameter = parameter->next;
 
       dump_stack();
@@ -436,6 +437,7 @@ void typecheck_function(struct BaseCell *current, int16_t *uncheck_parameter_num
         }
       }
     }
+    drop_cell(tmp_type);
   }
 }
 
@@ -451,6 +453,7 @@ void typecheck_not_function(char *check_type, int16_t *uncheck_parameter_number)
       printf("except type %s but you give type %s\n", tmp_type->content.string, check_type);
       SECD_MACHINE_NS(type_error)("type error");
     }
+    drop_cell(tmp_type);
   }
 }
 
@@ -538,7 +541,6 @@ SETUP:
 
   recover_stack();
 }
-//#endif
 
 void compile_code(int16_t input_size, char *command) {
   memset(secd_machine.tmp_code, ' ', CMD_BUFFER_SIZE);
