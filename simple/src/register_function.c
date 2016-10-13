@@ -94,5 +94,5 @@ int main(void) {
   register_function();
   run();
   stop_machine();
-  return 1;
+  return 0;
 }
