@@ -7,7 +7,6 @@
 void set_stack_next(struct SECD *, struct BaseCell *);
 struct BaseCell *pop_code_next(struct SECD *);
 struct BaseCell *pop_stack_next(struct SECD *);
-void compile_code(struct SECD *, int16_t, char *);
 void run_code(struct SECD *);
 
 // user command

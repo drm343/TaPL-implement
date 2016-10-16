@@ -541,16 +541,6 @@ SETUP:
   recover_stack(secd_machine);
 }
 
-void compile_code(struct SECD *secd_machine, int16_t input_size, char *command) {
-  memset(secd_machine->tmp_code, ' ', CMD_BUFFER_SIZE);
-  strncpy(secd_machine->tmp_code, command, input_size);
-
-  tokenize_pass(secd_machine);
-  turn_integer_pass(secd_machine);
-  turn_function_pass(secd_machine);
-  typecheck_pass(secd_machine);
-}
-
 void compile_message(struct SECD *secd_machine) {
   tokenize_pass(secd_machine);
   turn_integer_pass(secd_machine);
@@ -802,11 +792,9 @@ void add_primitive(struct SECD *secd_machine,
 
 void run_uncheck_function(struct SECD *secd_machine, struct BaseCell *cell) {
   struct BaseList *item = NULL;
-  struct BaseCell *car = NULL;
   struct BaseCell *cdr = NULL;
 
   item = cell->content.list;
-  car = item->car;
   cdr = item->cdr;
   item->cdr = NULL;
     
