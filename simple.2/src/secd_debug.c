@@ -88,8 +88,7 @@ void debug_struct(struct BaseCell *cell) {
 
     cell = cell->next;
   }
-  printf("\n");
-  printf("[struct]:done\n");
+  printf("[struct]:done\n\n");
 #endif
 }
 

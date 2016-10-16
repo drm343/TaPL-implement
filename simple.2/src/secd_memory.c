@@ -181,7 +181,6 @@ struct BaseCell *new_uncheck_function(struct SECD *secd_machine,
 
 struct BaseCell *new_dump(struct SECD *secd_machine, struct BaseCell *item) {
   struct BaseCell *cell = new_basecell(secd_machine);
-
   cell->type = DUMP;
   cell->content.item = item;
   cell->next = NULL;
