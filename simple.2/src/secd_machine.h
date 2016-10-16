@@ -19,4 +19,5 @@ void SECD_MACHINE_NS(error)(struct SECD *, char *);
 void SECD_MACHINE_NS(type_error)(struct SECD *, char *);
 void SECD_MACHINE_NS(recover_machine)(struct SECD *);
 void stop_machine(struct SECD *);
+bool run_atom(struct SECD *, struct BaseCell *, char *);
 bool run_integer(struct SECD *, struct BaseCell *, char *);

@@ -78,6 +78,26 @@ void add(struct SECD *machine) {
   return;
 }
 
+void show(struct SECD *machine) {
+  char *load_str = NULL;
+
+  struct BaseCell *p1 = pop_code_next(machine);
+  if (!run_atom(machine, p1, "path is not exist")) {
+    return;
+  }
+
+  p1 = pop_stack_next(machine);
+
+  int16_t str_size = strlen(p1->content.string);
+  load_str = new_string(str_size);
+  strncpy(load_str, p1->content.string, str_size);
+
+  printf("%s\n", load_str);
+
+  free(load_str);
+  drop_cell(machine, p1);
+}
+
 void debug(struct SECD *machine) {
   debug_code(machine);
   debug_stack(machine);
@@ -87,6 +107,7 @@ void debug(struct SECD *machine) {
 void register_function(struct SECD *machine) {
   ADD_FUNCTION(machine, "nil: [ -> bottom! ]", nil);
   ADD_FUNCTION(machine, "atom?: [ any! -> bool! ]", is_atom);
+  ADD_FUNCTION(machine, "show: [ atom! -> bottom! ]", show);
   ADD_FUNCTION(machine, "hello: [ -> bottom! ]", hello);
   ADD_FUNCTION(machine, "add: [ int! int! -> int! ]", add);
   ADD_FUNCTION(machine, "debug: [ -> bottom! ]", debug);

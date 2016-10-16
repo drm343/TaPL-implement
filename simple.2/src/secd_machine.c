@@ -250,7 +250,7 @@ void compile_atom(struct SECD *secd_machine, char *atom_string) {
 }
 
 struct BaseCell *compile_integer(struct SECD *secd_machine, struct BaseCell *cell) {
-  size_t atom_size = strlen(cell->content.string) - 1;
+  size_t atom_size = strlen(cell->content.string);
   char *atom_string = cell->content.string;
   int64_t count = 0;
 
@@ -309,7 +309,7 @@ void tokenize_pass(struct SECD *secd_machine) {
   for(int16_t next = 0; next <= str_size; next++) {
     if(((int)secd_machine->tmp_code[next]) == SPACE) {
       if(counter >= 1) {
-        char *atom_string = new_string(counter + 1);
+        char *atom_string = new_string(counter);
         strncpy(atom_string, command, counter);
         compile_atom(secd_machine, atom_string);
       }
@@ -804,6 +804,44 @@ void run_uncheck_function(struct SECD *secd_machine, struct BaseCell *cell) {
   item = cdr->content.list;
   cdr = item->cdr;
   cdr->content.func(secd_machine);
+}
+
+bool run_atom(struct SECD *secd_machine, struct BaseCell *cell, char *error_msg) {
+  if(cell == NULL) {
+    SECD_MACHINE_NS(error)(secd_machine, error_msg);
+    return false;
+  }
+  else if(cell->type == UNCHECK_FUNC) {
+    if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
+      run_uncheck_function(secd_machine, cell);
+    }
+    drop_cell(secd_machine, cell);
+  }
+  else if(cell->type == ATOM) {
+    set_stack_next(secd_machine, cell);
+  }
+  else if(cell->type == NIL) {
+    drop_integer(secd_machine, cell);
+    SECD_MACHINE_NS(error)(secd_machine, error_msg);
+    return false;
+  }
+  else if(cell->type == INTEGER) {
+    drop_integer(secd_machine, cell);
+    SECD_MACHINE_NS(error)(secd_machine, "not atom");
+    return false;
+  }
+  else if(cell->type == LIST) {
+    drop_list(secd_machine, cell);
+    SECD_MACHINE_NS(error)(secd_machine, error_msg);
+    return false;
+  }
+
+  if(secd_machine->status == SECD_STATUS_NS(ERROR)) {
+    return false;
+  }
+  else {
+    return true;
+  }
 }
 
 bool run_integer(struct SECD *secd_machine, struct BaseCell *cell, char *error_msg) {
