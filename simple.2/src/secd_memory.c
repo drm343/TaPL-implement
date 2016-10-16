@@ -1,4 +1,5 @@
 #include "secd_memory.h"
+#include "secd_debug.h"
 
 // get memory from os
 char *debug_new_string(int16_t input_size, char *msg) {
@@ -29,26 +30,28 @@ void set_list_next(struct SECD *secd_machine, struct BaseCell *cell) {
 }
 
 struct BaseCell *new_basecell(struct SECD *secd_machine) {
+  struct BaseCell *new_cell = NULL;
+
   if(secd_machine->cell_pool == NULL) {
-    return (struct BaseCell*)malloc(sizeof(struct BaseCell));
+    new_cell = (struct BaseCell*)malloc(sizeof(struct BaseCell));
   }
   else {
-    struct BaseCell *new_cell = secd_machine->cell_pool;
+    new_cell = secd_machine->cell_pool;
     secd_machine->cell_pool = new_cell->next;
     new_cell->next = NULL;
-    return new_cell;
   }
+  return new_cell;
 }
 
-struct BaseList *new_baselist(struct SECD *secd_machine) {
+struct BaseCell *new_baselist(struct SECD *secd_machine) {
   if(secd_machine->list_pool == NULL) {
-    return (struct BaseList*)malloc(sizeof(struct BaseList));
+    struct BaseCell *cell = new_basecell(secd_machine);
+    struct BaseList *list = (struct BaseList*)malloc(sizeof(struct BaseList));
+    cell->content.list = list;
+    return cell;
   }
   else {
     struct BaseCell *new_cell = secd_machine->list_pool;
-    struct BaseList *new_list = new_cell->content.list;
-
-    new_cell->content.list = NULL;
 
     if(new_cell->next != NULL) {
       secd_machine->list_pool = new_cell->next;
@@ -58,8 +61,7 @@ struct BaseList *new_baselist(struct SECD *secd_machine) {
       secd_machine->list_pool_top = NULL;
     }
     new_cell->type = NIL;
-    drop_cell(secd_machine, new_cell);
-    return new_list;
+    return new_cell;
   }
 }
 
@@ -121,8 +123,8 @@ struct BaseCell *new_c_function(struct SECD *secd_machine, void (*func)(struct S
 }
 
 struct BaseCell *new_function(struct SECD *secd_machine, struct BaseCell *car, struct BaseCell *cdr) {
-  struct BaseCell *cell = new_basecell(secd_machine);
-  struct BaseList *pair = new_baselist(secd_machine);
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
 
   pair->car = car;
   pair->cdr = cdr;
@@ -136,8 +138,8 @@ struct BaseCell *new_function(struct SECD *secd_machine, struct BaseCell *car, s
 #ifdef DEBUG
 struct BaseCell *new_uncheck_function(struct SECD *secd_machine,
     struct BaseCell *name, struct BaseCell *func, int64_t status) {
-  struct BaseCell *cell = new_basecell(secd_machine);
-  struct BaseList *pair = new_baselist(secd_machine);
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
 
   pair->car = new_list(secd_machine, name, new_integer(secd_machine, status));
   pair->cdr = func;
@@ -150,8 +152,8 @@ struct BaseCell *new_uncheck_function(struct SECD *secd_machine,
 
 struct BaseCell *debug_new_uncheck_function(struct SECD *secd_machine,
     struct BaseCell *name, struct BaseCell *func) {
-  struct BaseCell *cell = new_basecell(secd_machine);
-  struct BaseList *pair = new_baselist(secd_machine);
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
 
   pair->car = name;
   pair->cdr = func;
@@ -164,8 +166,8 @@ struct BaseCell *debug_new_uncheck_function(struct SECD *secd_machine,
 #else
 struct BaseCell *new_uncheck_function(struct SECD *secd_machine,
     struct BaseCell *name, struct BaseCell *func) {
-  struct BaseCell *cell = new_basecell(secd_machine);
-  struct BaseList *pair = new_baselist(secd_machine);
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
 
   pair->car = name;
   pair->cdr = func;
@@ -187,8 +189,8 @@ struct BaseCell *new_dump(struct SECD *secd_machine, struct BaseCell *item) {
 }
 
 struct BaseCell *new_list(struct SECD *secd_machine, struct BaseCell *car, struct BaseCell *cdr) {
-  struct BaseCell *cell = new_basecell(secd_machine);
-  struct BaseList *pair = new_baselist(secd_machine);
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
 
   pair->car = car;
   pair->cdr = cdr;
