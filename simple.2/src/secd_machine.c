@@ -42,8 +42,8 @@ struct BaseCell *lookup_env(struct SECD *secd_machine, char *func) {
   while(current != NULL) {
     item = current->content.list;
     car = item->car;
-    
-    if(!STRCMP(car->content.string, func)) {
+
+    if((strlen(car->content.string) == strlen(func)) && !STRCMP(car->content.string, func)) {
       break;
     }
 
@@ -418,9 +418,34 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
     set_dump_next(secd_machine, new_integer(secd_machine, *uncheck_parameter_number));
     *uncheck_parameter_number = parameter_number;
 
-    for(;parameter_number > 0; parameter_number--) {
-      copy_stack_next(secd_machine, parameter);
+    struct BaseCell *bottom = NULL;
+    struct BaseCell *top = NULL;
+
+    int16_t backup_number = parameter_number;
+    for(; parameter_number > 0; parameter_number--) {
+      struct BaseCell *new_cell = copy_cell(secd_machine, parameter);
+
+      new_cell->next = NULL;
+      if(bottom == NULL) {
+        bottom = new_cell;
+        top = new_cell;
+      }
+      else {
+        new_cell->next = top;
+        top = new_cell;
+      }
       parameter = parameter->next;
+    }
+
+    parameter = top->next;
+
+    for(; backup_number > 0; backup_number--) {
+      set_stack_next(secd_machine, top);
+      top = parameter;
+
+      if(parameter != NULL) {
+        parameter = parameter->next;
+      }
     }
   }
 }

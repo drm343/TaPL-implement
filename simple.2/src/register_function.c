@@ -78,6 +78,34 @@ void add(struct SECD *machine) {
   return;
 }
 
+void test1(struct SECD *machine) {
+  int64_t a = 0;
+  char *b = NULL;
+
+  debug_code(machine);
+
+  struct BaseCell *first = pop_code_next(machine);
+  RUN_INTEGER(machine, first, "first argument is not exist");
+
+  struct BaseCell *second = pop_code_next(machine);
+  if (!run_atom(machine, second, "second argument is not exist")) {
+    drop_cell(machine, pop_stack_next(machine));
+    return;
+  }
+
+  second = pop_stack_next(machine);
+  first = pop_stack_next(machine);
+
+  a = first->content.integer;
+  b = second->content.string;
+
+  printf("%" PRId64 " : %s\n", a, b);
+
+  drop_cell(machine, first);
+  drop_cell(machine, second);
+  return;
+}
+
 void show(struct SECD *machine) {
   char *load_str = NULL;
 
@@ -107,6 +135,7 @@ void debug(struct SECD *machine) {
 void register_function(struct SECD *machine) {
   ADD_FUNCTION(machine, "nil: [ -> bottom! ]", nil);
   ADD_FUNCTION(machine, "atom?: [ any! -> bool! ]", is_atom);
+  ADD_FUNCTION(machine, "test1: [ int! atom! -> bottom! ]", add2);
   ADD_FUNCTION(machine, "show: [ atom! -> bottom! ]", show);
   ADD_FUNCTION(machine, "hello: [ -> bottom! ]", hello);
   ADD_FUNCTION(machine, "add: [ int! int! -> int! ]", add);
