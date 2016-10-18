@@ -135,7 +135,7 @@ void debug(struct SECD *machine) {
 void register_function(struct SECD *machine) {
   ADD_FUNCTION(machine, "nil: [ -> bottom! ]", nil);
   ADD_FUNCTION(machine, "atom?: [ any! -> bool! ]", is_atom);
-  ADD_FUNCTION(machine, "test1: [ int! atom! -> bottom! ]", add2);
+  ADD_FUNCTION(machine, "test1: [ int! atom! -> bottom! ]", test1);
   ADD_FUNCTION(machine, "show: [ atom! -> bottom! ]", show);
   ADD_FUNCTION(machine, "hello: [ -> bottom! ]", hello);
   ADD_FUNCTION(machine, "add: [ int! int! -> int! ]", add);
