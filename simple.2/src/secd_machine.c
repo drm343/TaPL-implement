@@ -387,56 +387,41 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
     int16_t *uncheck_parameter_number, int16_t *dump_function_number) {
   struct BaseCell *tmp_type = pop_stack_next(secd_machine);
 
-  if((tmp_type == NULL) && ((*dump_function_number) <= 0)) {
-    struct BaseCell *unchecked_type = get_function_type(current);
-    struct BaseCell *parameter = get_parameter_type(unchecked_type);
-    int16_t parameter_number = parameter->content.integer;
+  struct BaseCell *unchecked_type = get_function_type(current);
+  struct BaseCell *return_type = NULL;
 
-    *uncheck_parameter_number = *uncheck_parameter_number - 1;
-
-    if(parameter_number >= 1) {
-      *dump_function_number = *dump_function_number + 1;
-
-      parameter = parameter->next;
-
-      dump_stack(secd_machine);
-      set_dump_next(secd_machine, new_integer(secd_machine, *uncheck_parameter_number));
-      *uncheck_parameter_number = parameter_number;
-
-      for(;parameter_number > 0; parameter_number--) {
-        copy_stack_next(secd_machine, parameter);
-        parameter = parameter->next;
-      }
-    }
-  }
-  else {
-    struct BaseCell *unchecked_type = get_function_type(current);
-    struct BaseCell *return_type = get_return_type(unchecked_type);
-    struct BaseCell *parameter = get_parameter_type(unchecked_type);
-    int16_t parameter_number = parameter->content.integer;
+  if(tmp_type != NULL) {
+    return_type = get_return_type(unchecked_type);
 
     if(STRCMP(tmp_type->content.string, return_type->content.string)) {
       printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
       SECD_MACHINE_NS(type_error)(secd_machine, "type error");
+      drop_cell(secd_machine, tmp_type);
+      return;
     }
     else {
-      *uncheck_parameter_number = *uncheck_parameter_number - 1;
-      *dump_function_number = *dump_function_number + 1;
-
-      if(parameter_number >= 1) {
-        parameter = parameter->next;
-
-        dump_stack(secd_machine);
-        set_dump_next(secd_machine, new_integer(secd_machine, *uncheck_parameter_number));
-        *uncheck_parameter_number = parameter_number;
-
-        for(;parameter_number > 0; parameter_number--) {
-          copy_stack_next(secd_machine, parameter);
-          parameter = parameter->next;
-        }
-      }
+      drop_cell(secd_machine, tmp_type);
     }
-    drop_cell(secd_machine, tmp_type);
+  }
+
+  struct BaseCell *parameter = get_parameter_type(unchecked_type);
+  int16_t parameter_number = parameter->content.integer;
+
+  *uncheck_parameter_number = *uncheck_parameter_number - 1;
+
+  if(parameter_number >= 1) {
+    *dump_function_number = *dump_function_number + 1;
+
+    parameter = parameter->next;
+
+    dump_stack(secd_machine);
+    set_dump_next(secd_machine, new_integer(secd_machine, *uncheck_parameter_number));
+    *uncheck_parameter_number = parameter_number;
+
+    for(;parameter_number > 0; parameter_number--) {
+      copy_stack_next(secd_machine, parameter);
+      parameter = parameter->next;
+    }
   }
 }
 
@@ -555,7 +540,7 @@ void ldc(struct SECD *secd_machine, int64_t integer) {
 }
 
 // machine command
-void send(struct SECD *secd_machine, char *message) {
+static void send(struct SECD *secd_machine, char *message) {
   int16_t str_size = strlen(message);
   char exit_command[5];
 
@@ -573,7 +558,7 @@ void send(struct SECD *secd_machine, char *message) {
   }
 }
 
-void recv(struct SECD *secd_machine) {
+static void recv(struct SECD *secd_machine) {
   compile_message(secd_machine);
   run_code(secd_machine);
   memset(secd_machine->tmp_code, ' ', CMD_BUFFER_SIZE);
