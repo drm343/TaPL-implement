@@ -200,6 +200,29 @@ struct BaseCell *new_list(struct SECD *secd_machine, struct BaseCell *car, struc
   return cell;
 }
 
+struct BaseCell *new_pointer(struct SECD *secd_machine, void *pointer) {
+  struct BaseCell *cell = new_basecell(secd_machine);
+  cell->type = POINTER;
+  cell->content.pointer = pointer;
+  cell->next = NULL;
+  return cell;
+}
+
+struct BaseCell *new_custom(struct SECD *secd_machine, char *name, void *pointer) {
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
+  struct BaseCell *car = new_atom(secd_machine, name);
+  struct BaseCell *cdr = new_pointer(secd_machine, pointer);
+
+  pair->car = car;
+  pair->cdr = cdr;
+
+  cell->type = CUSTOM;
+  cell->content.list = pair;
+  cell->next = NULL;
+  return cell;
+}
+
 // return memory to os
 void free_list(struct BaseList *current) {
   struct BaseCell *car = current->car;

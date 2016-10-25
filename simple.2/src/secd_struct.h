@@ -39,7 +39,9 @@ enum Type {
   FUNC,
   C_FUNC,
   TYPE,
-  LIST
+  LIST,
+  CUSTOM,
+  POINTER
 };
 
 union Content {
@@ -48,6 +50,7 @@ union Content {
   struct BaseCell *item;
   char *string;
   void (*func)(struct SECD *);
+  void *pointer;
 };
 
 struct BaseCell {
