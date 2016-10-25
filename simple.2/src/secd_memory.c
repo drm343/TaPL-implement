@@ -309,6 +309,7 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
     list = cell->content.list;
 
     car = list->car;
+    debug_struct(car);
 
     list->car = NULL;
 
@@ -318,6 +319,7 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
   else if(cell->type == TYPE) {
     free(cell->content.string);
     cell->content.string = NULL;
+    cell->next = NULL;
     set_pool_next(secd_machine, cell);
   }
   else if(cell->type == FUNC) {
@@ -336,5 +338,8 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
   else if(cell->type == C_FUNC) {
     cell->content.func = NULL;
     set_pool_next(secd_machine, cell);
+  }
+  else {
+    printf("suck\n");
   }
 }

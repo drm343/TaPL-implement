@@ -114,6 +114,8 @@ void set_stack_next(struct SECD *secd_machine, struct BaseCell *cell) {
 }
 
 struct BaseCell *copy_cell(struct SECD *secd_machine, struct BaseCell *cell) {
+  // TODO:
+  // fix why new_type memory leak.
   struct BaseCell *new_cell = NULL;
   struct BaseList *list = NULL;
   struct BaseCell *car = NULL;
@@ -149,8 +151,6 @@ struct BaseCell *copy_cell(struct SECD *secd_machine, struct BaseCell *cell) {
     case UNCHECK_FUNC:
       list = cell->content.list;
       new_cell = copy_cell(secd_machine, list->car);
-      // TODO
-      // DEBUG version
 #ifdef DEBUG
       new_cell = debug_new_uncheck_function(secd_machine, new_cell, list->cdr);
 #else
@@ -383,6 +383,29 @@ void turn_function_pass(struct SECD *secd_machine) {
   secd_machine->code_bottom = tmp_bottom;
 }
 
+void reverse_stack(struct SECD *secd_machine, int16_t parameter_number) {
+  struct BaseCell *top = secd_machine->s;
+
+  secd_machine->s = NULL;
+  secd_machine->bottom = NULL;
+
+  for(; parameter_number > 0; parameter_number--) {
+    struct BaseCell *cell = top;
+
+    if(cell != NULL) {
+      if(cell->next == NULL) {
+        top = NULL;
+      }
+      else {
+        top = cell->next;
+      }
+      cell->next = NULL;
+
+      set_stack_next(secd_machine, cell);
+    }
+  }
+}
+
 void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
     int16_t *uncheck_parameter_number, int16_t *dump_function_number) {
   struct BaseCell *tmp_type = pop_stack_next(secd_machine);
@@ -418,35 +441,13 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
     set_dump_next(secd_machine, new_integer(secd_machine, *uncheck_parameter_number));
     *uncheck_parameter_number = parameter_number;
 
-    struct BaseCell *bottom = NULL;
-    struct BaseCell *top = NULL;
-
     int16_t backup_number = parameter_number;
     for(; parameter_number > 0; parameter_number--) {
-      struct BaseCell *new_cell = copy_cell(secd_machine, parameter);
-
-      new_cell->next = NULL;
-      if(bottom == NULL) {
-        bottom = new_cell;
-        top = new_cell;
-      }
-      else {
-        new_cell->next = top;
-        top = new_cell;
-      }
+      copy_stack_next(secd_machine, parameter);
       parameter = parameter->next;
     }
 
-    parameter = top->next;
-
-    for(; backup_number > 0; backup_number--) {
-      set_stack_next(secd_machine, top);
-      top = parameter;
-
-      if(parameter != NULL) {
-        parameter = parameter->next;
-      }
-    }
+    reverse_stack(secd_machine, backup_number);
   }
 }
 
@@ -542,7 +543,8 @@ SETUP:
   else {
     while((parameter_number >= 1) || (dump_function_number >= 1)) {
       for(; parameter_number > 0; parameter_number--) {
-        pop_stack_next(secd_machine);
+        current = pop_stack_next(secd_machine);
+        drop_cell(secd_machine, current);
       }
       check_is_return(secd_machine, &parameter_number, &dump_function_number);
     }
