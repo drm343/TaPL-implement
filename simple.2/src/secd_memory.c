@@ -106,10 +106,10 @@ struct BaseCell *new_atom(struct SECD *secd_machine, char *atom_string) {
   return cell;
 }
 
-struct BaseCell *new_type(struct SECD *secd_machine, char *atom_string) {
+struct BaseCell *new_type(struct SECD *secd_machine, int64_t value) {
   struct BaseCell *cell = new_basecell(secd_machine);
   cell->type = TYPE;
-  cell->content.string = atom_string;
+  cell->content.integer = value;
   cell->next = NULL;
   return cell;
 }
@@ -281,7 +281,6 @@ void free_stack(struct BaseCell *current) {
   }
 
   while(current != NULL) {
-    debug_item(current, 0);
     if(current->type == ATOM) {
       free(current->content.string);
     }
@@ -293,9 +292,6 @@ void free_stack(struct BaseCell *current) {
     }
     else if(current->type == UNCHECK_FUNC) {
       free_uncheck_function(current->content.list);
-    }
-    else if(current->type == TYPE) {
-      free(current->content.string);
     }
     else if(current->type == FUNC) {
       free_list(current->content.list);
@@ -357,7 +353,7 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
 
   if(cell == NULL) {
   }
-  if(cell->type == ATOM) {
+  else if(cell->type == ATOM) {
     drop_atom(secd_machine, cell);
   }
   else if(cell->type == NIL) {
@@ -395,9 +391,6 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
     drop_cell(secd_machine, car);
   }
   else if(cell->type == TYPE) {
-    free(cell->content.string);
-    cell->content.string = NULL;
-    cell->next = NULL;
     set_pool_next(secd_machine, cell);
   }
   else if(cell->type == FUNC) {

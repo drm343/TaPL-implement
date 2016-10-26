@@ -112,7 +112,7 @@ void debug_item(struct BaseCell *cell, int16_t count) {
     printf("%d %s:atom!\n", count, cell->content.string);
   }
   else if(cell->type == TYPE) {
-    printf("%d %s:type!\n", count, cell->content.string);
+    printf("%d %ld:type!\n", count, cell->content.integer);
   }
   else if(cell->type == UNCHECK_FUNC) {
     struct BaseList *list = cell->content.list;
@@ -166,14 +166,14 @@ void debug_item(struct BaseCell *cell, int16_t count) {
     debug_item(cdr, count + 1);
   }
   else if(cell->type == FUNC) {
-    printf("%d pointer:func! %p\n", count, (void *)(cell->content.func));
+    printf("%d %p:func!\n", count, (void *)(cell->content.func));
   }
   else if(cell->type == VAR) {
     struct BaseList *list = cell->content.list;
     struct BaseCell *car = list->car;
     struct BaseCell *cdr = list->cdr;
 
-    printf("%d pointer:var! %p\n", count, cell->content.pointer);
+    printf("%d %p:var!\n", count, cell->content.pointer);
     for(int16_t i = 0; i < count; i++) {
       printf("  ");
     }

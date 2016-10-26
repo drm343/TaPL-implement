@@ -83,8 +83,6 @@ void test1(struct SECD *machine) {
   int64_t a = 0;
   char *b = NULL;
 
-  debug_code(machine);
-
   struct BaseCell *first = pop_code_next(machine);
   RUN_INTEGER(machine, first, "first argument is not exist");
 

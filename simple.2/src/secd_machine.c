@@ -2,13 +2,13 @@
 #include "secd_machine.h"
 #include "secd_debug.h"
 #include "secd_memory.h"
+#include "secd_type.h"
 
 #define ESC 27
 #define ESCAPE 34
 #define SPACE (int)' '
 #define ASCII_0 48
 #define ASCII_9 57
-#define STRCMP(x, y) strncmp(x, y, strlen(x))
 
 void run_code(struct SECD *);
 
@@ -153,10 +153,7 @@ struct BaseCell *copy_cell(struct SECD *secd_machine, struct BaseCell *cell) {
       new_cell = new_list(secd_machine, car, cdr);
       break;
     case TYPE:
-      str_size = strlen(cell->content.string);
-      atom_string = new_string(str_size);
-      strncpy(atom_string, cell->content.string, str_size);
-      new_cell = new_type(secd_machine, atom_string);
+      new_cell = new_integer(secd_machine, cell->content.integer);
       break;
     case UNCHECK_FUNC:
       list = cell->content.list;
@@ -430,10 +427,17 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
   struct BaseCell *return_type = NULL;
 
   if(tmp_type != NULL) {
+    *uncheck_parameter_number = *uncheck_parameter_number - 1;
+
     return_type = get_return_type(unchecked_type);
 
-    if(STRCMP(tmp_type->content.string, return_type->content.string)) {
-      printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
+    if(tmp_type->content.integer == TYPE_ANY) {
+      drop_cell(secd_machine, tmp_type);
+    }
+    else if(tmp_type->content.integer != return_type->content.integer) {
+      printf("except type %s but you give type %s\n",
+          type_of(secd_machine, tmp_type->content.integer),
+          type_of(secd_machine, return_type->content.integer));
       SECD_MACHINE_NS(type_error)(secd_machine, "type error");
       drop_cell(secd_machine, tmp_type);
       return;
@@ -445,8 +449,6 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
 
   struct BaseCell *parameter = get_parameter_type(unchecked_type);
   int16_t parameter_number = parameter->content.integer;
-
-  *uncheck_parameter_number = *uncheck_parameter_number - 1;
 
   if(parameter_number >= 1) {
     *dump_function_number = *dump_function_number + 1;
@@ -475,32 +477,35 @@ void typecheck_variable(struct SECD *secd_machine, struct BaseCell *current,
   struct BaseCell *return_type = NULL;
 
   if(tmp_type != NULL) {
-    return_type = get_return_type(unchecked_type);
-
-    if(STRCMP(tmp_type->content.string, return_type->content.string)) {
-      printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
-      SECD_MACHINE_NS(type_error)(secd_machine, "type error");
-      drop_cell(secd_machine, tmp_type);
-      return;
-    }
-    else {
-      drop_cell(secd_machine, tmp_type);
-    }
-  }
-
-  *uncheck_parameter_number = *uncheck_parameter_number - 1;
-}
-
-void typecheck_not_function(struct SECD *secd_machine, char *check_type, int16_t *uncheck_parameter_number) {
-  struct BaseCell *tmp_type = pop_stack_next(secd_machine);
-
-  if(tmp_type == NULL) {
-  }
-  else {
     *uncheck_parameter_number = *uncheck_parameter_number - 1;
 
-    if(STRCMP(tmp_type->content.string, check_type)) {
-      printf("except type %s but you give type %s\n", tmp_type->content.string, check_type);
+    return_type = get_return_type(unchecked_type);
+
+    if(tmp_type->content.integer == TYPE_ANY) {
+    }
+    else if(tmp_type->content.integer != return_type->content.integer) {
+      printf("except type %s but you give type %s\n",
+          type_of(secd_machine, tmp_type->content.integer),
+          type_of(secd_machine, return_type->content.integer));
+      SECD_MACHINE_NS(type_error)(secd_machine, "type error");
+    }
+    drop_cell(secd_machine, tmp_type);
+  }
+}
+
+void typecheck_not_function(struct SECD *secd_machine, int64_t check_type,
+    int16_t *uncheck_parameter_number) {
+  struct BaseCell *tmp_type = pop_stack_next(secd_machine);
+
+  if(tmp_type != NULL) {
+    *uncheck_parameter_number = *uncheck_parameter_number - 1;
+
+    if(tmp_type->content.integer == TYPE_ANY) {
+    }
+    else if(tmp_type->content.integer != check_type) {
+      printf("except type %s but you give type %s\n",
+          type_of(secd_machine, tmp_type->content.integer),
+          type_of(secd_machine, check_type));
       SECD_MACHINE_NS(type_error)(secd_machine, "type error");
     }
     drop_cell(secd_machine, tmp_type);
@@ -521,7 +526,7 @@ void typecheck_pass(struct SECD *secd_machine) {
   struct BaseCell *current = pop_code_next(secd_machine);
   struct BaseCell *tmp = NULL;
   struct BaseCell *tmp_bottom = NULL;
-  char *check_type = NULL;
+  int64_t check_type = 0;
   int16_t dump_function_number = 0;
   int16_t parameter_number = 0;
 
@@ -533,23 +538,23 @@ void typecheck_pass(struct SECD *secd_machine) {
 #endif
     switch(current->type) {
       case UNCHECK_FUNC:
-        check_type = "func!";
+        check_type = easy_hash_value("func!");
         goto FUNC;
         break;
       case UNCHECK_VAR:
-        check_type = "var!";
+        check_type = easy_hash_value("var!");
         goto VAR;
         break;
       case INTEGER:
-        check_type = "int!";
+        check_type = easy_hash_value("int!");
         goto ATOM;
         break;
       case ATOM:
-        check_type = "atom!";
+        check_type = easy_hash_value("atom!");
         goto ATOM;
         break;
       default:
-        check_type = "bottom!";
+        check_type = TYPE_BOTTOM;
         goto ATOM;
         break;
     }
@@ -653,12 +658,16 @@ struct SECD *init_machine(void (*register_function)(struct SECD *)) {
   secd_machine->dump = NULL;
   secd_machine->dump_bottom = NULL;
 
+  secd_machine->type_pool = NULL;
+  secd_machine->type_pool_bottom = NULL;
+
   secd_machine->cell_pool = NULL;
   secd_machine->cell_pool_top = NULL;
 
   secd_machine->list_pool = NULL;
   secd_machine->list_pool_top = NULL;
 
+  basetype(secd_machine);
   secd_machine->status = SECD_STATUS_NS(CONTINUE);
 
   secd_machine->send = send;
@@ -689,6 +698,7 @@ void stop_machine(struct SECD *secd_machine) {
   free_stack(secd_machine->bottom);
   free_stack(secd_machine->code_bottom);
   free_stack(secd_machine->env);
+  free_stack(secd_machine->type_pool_bottom);
 
   free_stack(secd_machine->cell_pool);
   free_stack(secd_machine->list_pool);
@@ -804,7 +814,8 @@ void add_variable(struct SECD *secd_machine,
 #ifdef DEBUG
           printf("%s ", atom_string);
 #endif
-          next = new_type(secd_machine, atom_string);
+          next = new_type(secd_machine, type_of_value(secd_machine, atom_string));
+          free(atom_string);
           if(type_cell == NULL) {
             type_cell = next;
             tmp = next;
@@ -837,7 +848,8 @@ void add_variable(struct SECD *secd_machine,
 #ifdef DEBUG
           printf("-> %s\n", atom_string);
 #endif
-          next = new_type(secd_machine, atom_string);
+          next = new_type(secd_machine, type_of_value(secd_machine, atom_string));
+          free(atom_string);
           type_cell = new_list(secd_machine, type_cell, next);
 
           var_string += counter;
@@ -989,7 +1001,8 @@ void add_primitive(struct SECD *secd_machine,
 #ifdef DEBUG
           printf("%s ", atom_string);
 #endif
-          next = new_type(secd_machine, atom_string);
+          next = new_type(secd_machine, type_of_value(secd_machine, atom_string));
+          free(atom_string);
           if(type_cell == NULL) {
             type_cell = next;
             tmp = next;
@@ -1022,7 +1035,8 @@ void add_primitive(struct SECD *secd_machine,
 #ifdef DEBUG
           printf("-> %s\n", atom_string);
 #endif
-          next = new_type(secd_machine, atom_string);
+          next = new_type(secd_machine, type_of_value(secd_machine, atom_string));
+          free(atom_string);
           type_cell = new_list(secd_machine, type_cell, next);
 
           func_string += counter;

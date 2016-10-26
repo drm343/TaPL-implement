@@ -6,7 +6,7 @@ struct BaseCell *new_nil(struct SECD *);
 struct BaseCell *new_integer(struct SECD *, int64_t);
 struct BaseCell *new_atom(struct SECD *, char *);
 struct BaseCell *new_pointer(struct SECD *, void *);
-struct BaseCell *new_type(struct SECD *, char *);
+struct BaseCell *new_type(struct SECD *, int64_t);
 struct BaseCell *new_variable(struct SECD *, struct BaseCell *, struct BaseCell *);
 struct BaseCell *new_function(struct SECD *, struct BaseCell *, struct BaseCell *);
 struct BaseCell *new_c_function(struct SECD *, void (*)(struct SECD *));

@@ -9,6 +9,7 @@
 
 #define SECD_STATUS_NS(name) SECD_STATUS_##name
 #define PRIMITIVE_NS(name) PRIMITIVE_##name
+#define STRCMP(x, y) strncmp(x, y, strlen(x))
 
 // compile type
 enum COMPILE_PRIMITIVE {
@@ -31,7 +32,7 @@ struct BaseList {
   struct BaseCell *cdr;
 };
 
-enum Type {
+enum NodeType {
   NIL = 0,
   INTEGER,
   ATOM,
@@ -57,7 +58,7 @@ union Content {
 };
 
 struct BaseCell {
-  enum Type type;
+  enum NodeType type;
   union Content content;
   struct BaseCell *next;
 };
@@ -84,6 +85,9 @@ struct SECD {
 
   struct BaseCell *list_pool;
   struct BaseCell *list_pool_top;
+
+  struct BaseCell *type_pool;
+  struct BaseCell *type_pool_bottom;
 
   enum SECD_STATUS status;
 
