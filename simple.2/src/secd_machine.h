@@ -13,6 +13,7 @@ void run_code(struct SECD *);
 void ldc(struct SECD *, int64_t);
 
 // machine command
+void add_variable(struct SECD *, char *, int16_t, void *);
 void add_primitive(struct SECD *, char *, int16_t, void (*)(struct SECD *));
 struct SECD *init_machine(void (*)(struct SECD *));
 void SECD_MACHINE_NS(error)(struct SECD *, char *);

@@ -40,11 +40,21 @@ struct BaseCell *lookup_env(struct SECD *secd_machine, char *func) {
   struct BaseCell *car = NULL;
 
   while(current != NULL) {
-    item = current->content.list;
-    car = item->car;
+    if(current->type == FUNC) {
+      item = current->content.list;
+      car = item->car;
 
-    if((strlen(car->content.string) == strlen(func)) && !STRCMP(car->content.string, func)) {
-      break;
+      if((strlen(car->content.string) == strlen(func)) && !STRCMP(car->content.string, func)) {
+        break;
+      }
+    }
+    else if(current->type == VAR) {
+      item = current->content.list;
+      car = item->car;
+
+      if((strlen(car->content.string) == strlen(func)) && !STRCMP(car->content.string, func)) {
+        break;
+      }
     }
 
     current = current->next;
@@ -274,22 +284,28 @@ struct BaseCell *compile_unchecked_function(struct SECD *secd_machine,
   struct BaseCell *result = lookup_env(secd_machine, cell->content.string);
 
   if(result != NULL) {
-    return new_uncheck_function(secd_machine, cell, result, status);
+    if(result->type == FUNC) {
+      return new_uncheck_function(secd_machine, cell, result, status);
+    }
+    else if(result->type == VAR) {
+      return new_uncheck_variable(secd_machine, cell, result);
+    }
   }
-  else {
-    return cell;
-  }
+  return cell;
 }
 #else
 struct BaseCell *compile_unchecked_function(struct SECD *secd_machine, struct BaseCell *cell) {
   struct BaseCell *result = lookup_env(secd_machine, cell->content.string);
 
   if(result != NULL) {
-    return new_uncheck_function(secd_machine, cell, result);
+    if(result->type == FUNC) {
+      return new_uncheck_function(secd_machine, cell, result);
+    }
+    else if(result->type == VAR) {
+      return new_uncheck_variable(secd_machine, cell, result);
+    }
   }
-  else {
-    return cell;
-  }
+  return cell;
 }
 #endif
 
@@ -451,6 +467,30 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
   }
 }
 
+void typecheck_variable(struct SECD *secd_machine, struct BaseCell *current,
+    int16_t *uncheck_parameter_number, int16_t *dump_function_number) {
+  struct BaseCell *tmp_type = pop_stack_next(secd_machine);
+
+  struct BaseCell *unchecked_type = get_function_type(current);
+  struct BaseCell *return_type = NULL;
+
+  if(tmp_type != NULL) {
+    return_type = get_return_type(unchecked_type);
+
+    if(STRCMP(tmp_type->content.string, return_type->content.string)) {
+      printf("except type %s but you give type %s\n", tmp_type->content.string, return_type->content.string);
+      SECD_MACHINE_NS(type_error)(secd_machine, "type error");
+      drop_cell(secd_machine, tmp_type);
+      return;
+    }
+    else {
+      drop_cell(secd_machine, tmp_type);
+    }
+  }
+
+  *uncheck_parameter_number = *uncheck_parameter_number - 1;
+}
+
 void typecheck_not_function(struct SECD *secd_machine, char *check_type, int16_t *uncheck_parameter_number) {
   struct BaseCell *tmp_type = pop_stack_next(secd_machine);
 
@@ -496,6 +536,10 @@ void typecheck_pass(struct SECD *secd_machine) {
         check_type = "func!";
         goto FUNC;
         break;
+      case UNCHECK_VAR:
+        check_type = "var!";
+        goto VAR;
+        break;
       case INTEGER:
         check_type = "int!";
         goto ATOM;
@@ -512,6 +556,9 @@ void typecheck_pass(struct SECD *secd_machine) {
 
 FUNC:
     typecheck_function(secd_machine, current, &parameter_number, &dump_function_number);
+    goto SETUP;
+VAR:
+    typecheck_variable(secd_machine, current, &parameter_number, &dump_function_number);
     goto SETUP;
 ATOM:
     typecheck_not_function(secd_machine, check_type, &parameter_number);
@@ -650,6 +697,191 @@ void stop_machine(struct SECD *secd_machine) {
   free(secd_machine);
 }
 
+void add_variable(struct SECD *secd_machine,
+    char *var_string, int16_t name_size, void *variable) {
+  enum COMPILE_PRIMITIVE status = PRIMITIVE_NS(start);
+  struct BaseCell *name_cell = NULL;
+  struct BaseCell *type_cell = NULL;
+  struct BaseCell *var_cell = new_pointer(secd_machine, variable);
+  struct BaseCell *tmp = NULL;
+  struct BaseCell *next = NULL;
+  int16_t counter = 0;
+  int16_t parameter = 0;
+  int8_t keyword = 0;
+
+  while(status != PRIMITIVE_NS(end)) {
+    switch(status) {
+      case PRIMITIVE_NS(start):
+        if(var_string[counter] == ':') {
+          char *atom_string = new_string(counter);
+          strncpy(atom_string, var_string, counter);
+
+#ifdef DEBUG
+          printf("%s: ", atom_string);
+#endif
+          name_cell = new_atom(secd_machine, atom_string);
+          var_string += counter + 1;
+          counter = 0;
+          status = PRIMITIVE_NS(find_keyword);
+        }
+        else {
+          counter++;
+        }
+        break;
+      case PRIMITIVE_NS(find_keyword):
+        if(var_string[counter] != ' ') {
+          char *atom_string = new_string(4);
+          strncpy(atom_string, var_string, 4);
+
+          if(!STRCMP("func", atom_string)) {
+            keyword = 1;
+            counter += 3;
+          }
+          else if(!STRCMP("var", atom_string)) {
+            keyword = 2;
+            counter += 2;
+          }
+
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(find_type_start);
+          free(atom_string);
+        }
+        else {
+          counter++;
+          var_string += counter;
+          counter = 0;
+        }
+        break;
+      case PRIMITIVE_NS(find_type_start):
+        if(var_string[counter] == '[') {
+          counter++;
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(skip_space);
+        }
+        else {
+          counter++;
+        }
+        break;
+      case PRIMITIVE_NS(skip_space):
+        if((var_string[counter] == '-') && (var_string[counter + 1] == '>')) {
+          next = new_integer(secd_machine, parameter);
+
+          if(type_cell == NULL) {
+            type_cell = next;
+          }
+          else {
+            next->next = type_cell;
+            type_cell = next;
+          }
+          counter += 2;
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(return_type);
+        }
+        else if(var_string[counter] != ' ') {
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(input_type);
+        }
+        else {
+          counter++;
+        }
+        break;
+      case PRIMITIVE_NS(input_type):
+        if((var_string[counter] == '-') && (var_string[counter + 1] == '>')) {
+          counter += 2;
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(return_type);
+        }
+        else if(var_string[counter] == '!') {
+          counter++;
+          char *atom_string = new_string(counter);
+          strncpy(atom_string, var_string, counter);
+
+#ifdef DEBUG
+          printf("%s ", atom_string);
+#endif
+          next = new_type(secd_machine, atom_string);
+          if(type_cell == NULL) {
+            type_cell = next;
+            tmp = next;
+          }
+          else {
+            tmp->next = next;
+            tmp = next;
+          }
+
+          parameter++;
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(skip_space);
+        }
+        else {
+          counter++;
+        }
+        break;
+      case PRIMITIVE_NS(return_type):
+        if(var_string[counter] == ' ') {
+          counter++;
+          var_string += counter;
+          counter = 0;
+        }
+        else if(var_string[counter] == '!') {
+          counter++;
+          char *atom_string = new_string(counter);
+          strncpy(atom_string, var_string, counter);
+
+#ifdef DEBUG
+          printf("-> %s\n", atom_string);
+#endif
+          next = new_type(secd_machine, atom_string);
+          type_cell = new_list(secd_machine, type_cell, next);
+
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(find_type_stop);
+        }
+        else {
+          counter++;
+        }
+        break;
+      case PRIMITIVE_NS(find_type_stop):
+        if(var_string[counter] == ' ') {
+          counter++;
+          var_string += counter;
+          counter = 0;
+        }
+        else if(var_string[counter] == ']') {
+          counter++;
+          var_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(end);
+        }
+        else {
+          counter++;
+        }
+        break;
+      default:
+        status = PRIMITIVE_NS(end);
+        break;
+    }
+  }
+
+  struct BaseCell *list = new_list(secd_machine, type_cell, var_cell);
+  struct BaseCell *cell = NULL;
+
+  if(keyword == 1) {
+    cell = new_function(secd_machine, name_cell, list);
+  }
+  else if(keyword == 2) {
+    cell = new_variable(secd_machine, name_cell, list);
+  }
+  set_env_next(secd_machine, cell);
+}
+
 void add_primitive(struct SECD *secd_machine,
     char *func_string, int16_t name_size, void (*func)(struct SECD *)) {
   enum COMPILE_PRIMITIVE status = PRIMITIVE_NS(start);
@@ -660,6 +892,7 @@ void add_primitive(struct SECD *secd_machine,
   struct BaseCell *next = NULL;
   int16_t counter = 0;
   int16_t parameter = 0;
+  int8_t keyword = 0;
 
   while(status != PRIMITIVE_NS(end)) {
     switch(status) {
@@ -674,10 +907,35 @@ void add_primitive(struct SECD *secd_machine,
           name_cell = new_atom(secd_machine, atom_string);
           func_string += counter + 1;
           counter = 0;
-          status = PRIMITIVE_NS(find_type_start);
+          status = PRIMITIVE_NS(find_keyword);
         }
         else {
           counter++;
+        }
+        break;
+      case PRIMITIVE_NS(find_keyword):
+        if(func_string[counter] != ' ') {
+          char *atom_string = new_string(5);
+          strncpy(atom_string, func_string, 4);
+
+          if(!STRCMP("func", atom_string)) {
+            keyword = 1;
+            counter += 3;
+          }
+          else if(!STRCMP("var", atom_string)) {
+            keyword = 2;
+            counter += 2;
+          }
+
+          func_string += counter;
+          counter = 0;
+          status = PRIMITIVE_NS(find_type_start);
+          free(atom_string);
+        }
+        else {
+          counter++;
+          func_string += counter;
+          counter = 0;
         }
         break;
       case PRIMITIVE_NS(find_type_start):
@@ -798,7 +1056,14 @@ void add_primitive(struct SECD *secd_machine,
   }
 
   struct BaseCell *list = new_list(secd_machine, type_cell, func_cell);
-  struct BaseCell *cell = new_function(secd_machine, name_cell, list);
+  struct BaseCell *cell = NULL;
+
+  if(keyword == 1) {
+    cell = new_function(secd_machine, name_cell, list);
+  }
+  else if(keyword == 2) {
+    cell = new_variable(secd_machine, name_cell, list);
+  }
   set_env_next(secd_machine, cell);
 }
 
@@ -818,6 +1083,27 @@ void run_uncheck_function(struct SECD *secd_machine, struct BaseCell *cell) {
   cdr->content.func(secd_machine);
 }
 
+void run_uncheck_variable(struct SECD *secd_machine, struct BaseCell *cell) {
+  struct BaseList *item = NULL;
+  struct BaseCell *cdr = NULL;
+
+  item = cell->content.list;
+  cdr = item->cdr;
+  item->cdr = NULL;
+    
+  item = cdr->content.list;
+  cdr = item->cdr;
+
+  item = cdr->content.list;
+  cdr = item->cdr;
+
+  int16_t str_size = strlen((char *)cdr->content.pointer);
+  char *atom_string = new_string(str_size);
+  strncpy(atom_string, (char *)cdr->content.pointer, str_size);
+  struct BaseCell *new_cell = new_atom(secd_machine, atom_string);
+  set_stack_next(secd_machine, new_cell);
+}
+
 bool run_atom(struct SECD *secd_machine, struct BaseCell *cell, char *error_msg) {
   if(cell == NULL) {
     SECD_MACHINE_NS(error)(secd_machine, error_msg);
@@ -826,6 +1112,12 @@ bool run_atom(struct SECD *secd_machine, struct BaseCell *cell, char *error_msg)
   else if(cell->type == UNCHECK_FUNC) {
     if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
       run_uncheck_function(secd_machine, cell);
+    }
+    drop_cell(secd_machine, cell);
+  }
+  else if(cell->type == UNCHECK_VAR) {
+    if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
+      run_uncheck_variable(secd_machine, cell);
     }
     drop_cell(secd_machine, cell);
   }
@@ -864,6 +1156,12 @@ bool run_integer(struct SECD *secd_machine, struct BaseCell *cell, char *error_m
   else if(cell->type == UNCHECK_FUNC) {
     if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
       run_uncheck_function(secd_machine, cell);
+    }
+    drop_cell(secd_machine, cell);
+  }
+  else if(cell->type == UNCHECK_VAR) {
+    if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
+      run_uncheck_variable(secd_machine, cell);
     }
     drop_cell(secd_machine, cell);
   }
@@ -906,6 +1204,12 @@ void run_code(struct SECD *secd_machine) {
     if(current->type == UNCHECK_FUNC) {
       if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
         run_uncheck_function(secd_machine, current);
+      }
+      drop_cell(secd_machine, current);
+    }
+    else if(current->type == UNCHECK_VAR) {
+      if(secd_machine->status == SECD_STATUS_NS(CONTINUE)) {
+        run_uncheck_variable(secd_machine, current);
       }
       drop_cell(secd_machine, current);
     }

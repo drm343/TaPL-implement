@@ -4,6 +4,7 @@
 #include "secd_memory.h"
 
 #define ADD_FUNCTION(machine, name, func) add_primitive(machine, name, sizeof(name), func);
+#define ADD_VARIABLE(machine, name, variable) add_variable(machine, name, sizeof(name), variable);
 #define RUN_INTEGER(machine, cell, msg) \
   if (!run_integer(machine, cell, msg)) {\
     return;\
@@ -133,13 +134,17 @@ void debug(struct SECD *machine) {
 
 // main code
 void register_function(struct SECD *machine) {
-  ADD_FUNCTION(machine, "nil: [ -> bottom! ]", nil);
-  ADD_FUNCTION(machine, "atom?: [ any! -> bool! ]", is_atom);
-  ADD_FUNCTION(machine, "test1: [ int! atom! -> bottom! ]", test1);
-  ADD_FUNCTION(machine, "show: [ atom! -> bottom! ]", show);
-  ADD_FUNCTION(machine, "hello: [ -> bottom! ]", hello);
-  ADD_FUNCTION(machine, "add: [ int! int! -> int! ]", add);
-  ADD_FUNCTION(machine, "debug: [ -> bottom! ]", debug);
+  char *x = new_string(30);
+  strncpy(x, "hello", sizeof("hello"));
+
+  ADD_FUNCTION(machine, "nil: func [ -> bottom! ]", nil);
+  ADD_FUNCTION(machine, "atom?: func [ any! -> bool! ]", is_atom);
+  ADD_FUNCTION(machine, "test1: func [ int! atom! -> bottom! ]", test1);
+  ADD_FUNCTION(machine, "show: func [ atom! -> bottom! ]", show);
+  ADD_FUNCTION(machine, "hello: func [ -> bottom! ]", hello);
+  ADD_FUNCTION(machine, "add: func [ int! int! -> int! ]", add);
+  ADD_FUNCTION(machine, "debug: func [ -> bottom! ]", debug);
+  ADD_VARIABLE(machine, "x: var [ -> atom! ]", x);
 }
 
 void run(struct SECD *secd_machine) {

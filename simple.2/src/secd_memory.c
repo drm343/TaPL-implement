@@ -135,6 +135,19 @@ struct BaseCell *new_function(struct SECD *secd_machine, struct BaseCell *car, s
   return cell;
 }
 
+struct BaseCell *new_variable(struct SECD *secd_machine, struct BaseCell *car, struct BaseCell *cdr) {
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
+
+  pair->car = car;
+  pair->cdr = cdr;
+
+  cell->type = VAR;
+  cell->content.list = pair;
+  cell->next = NULL;
+  return cell;
+}
+
 #ifdef DEBUG
 struct BaseCell *new_uncheck_function(struct SECD *secd_machine,
     struct BaseCell *name, struct BaseCell *func, int64_t status) {
@@ -178,6 +191,19 @@ struct BaseCell *new_uncheck_function(struct SECD *secd_machine,
   return cell;
 }
 #endif
+struct BaseCell *new_uncheck_variable(struct SECD *secd_machine,
+    struct BaseCell *name, struct BaseCell *variable) {
+  struct BaseCell *cell = new_baselist(secd_machine);
+  struct BaseList *pair = cell->content.list;
+
+  pair->car = name;
+  pair->cdr = variable;
+
+  cell->type = UNCHECK_VAR;
+  cell->content.list = pair;
+  cell->next = NULL;
+  return cell;
+}
 
 struct BaseCell *new_dump(struct SECD *secd_machine, struct BaseCell *item) {
   struct BaseCell *cell = new_basecell(secd_machine);
@@ -240,6 +266,13 @@ void free_uncheck_function(struct BaseList *current) {
   free_stack(car);
 }
 
+void free_uncheck_variable(struct BaseList *current) {
+  struct BaseCell *car = current->car;
+
+  free(current);
+  free_stack(car);
+}
+
 void free_stack(struct BaseCell *current) {
   struct BaseCell *next = NULL;
 
@@ -248,11 +281,15 @@ void free_stack(struct BaseCell *current) {
   }
 
   while(current != NULL) {
+    debug_item(current, 0);
     if(current->type == ATOM) {
       free(current->content.string);
     }
     else if(current->type == LIST) {
       free_list(current->content.list);
+    }
+    else if(current->type == UNCHECK_VAR) {
+      free_uncheck_variable(current->content.list);
     }
     else if(current->type == UNCHECK_FUNC) {
       free_uncheck_function(current->content.list);
@@ -262,6 +299,17 @@ void free_stack(struct BaseCell *current) {
     }
     else if(current->type == FUNC) {
       free_list(current->content.list);
+    }
+    else if(current->type == VAR) {
+      free_list(current->content.list);
+    }
+    else if(current->type == POINTER) {
+      free(current->content.pointer);
+    }
+    else {
+#ifdef DEBUG
+      printf("other\n");
+#endif
     }
 
     free(current);
@@ -328,11 +376,18 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
     set_pool_next(secd_machine, cell);
     drop_cell(secd_machine, item);
   }
+  else if(cell->type == UNCHECK_VAR) {
+    list = cell->content.list;
+    car = list->car;
+
+    list->car = NULL;
+
+    set_list_next(secd_machine, cell);
+    drop_cell(secd_machine, car);
+  }
   else if(cell->type == UNCHECK_FUNC) {
     list = cell->content.list;
-
     car = list->car;
-    debug_struct(car);
 
     list->car = NULL;
 
@@ -363,6 +418,6 @@ void drop_cell(struct SECD *secd_machine, struct BaseCell *cell) {
     set_pool_next(secd_machine, cell);
   }
   else {
-    printf("suck\n");
+    printf("not set\n");
   }
 }

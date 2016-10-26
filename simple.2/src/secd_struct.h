@@ -13,6 +13,7 @@
 // compile type
 enum COMPILE_PRIMITIVE {
   PRIMITIVE_NS(start) = 0,
+  PRIMITIVE_NS(find_keyword),
   PRIMITIVE_NS(find_type_start),
   PRIMITIVE_NS(skip_space),
   PRIMITIVE_NS(input_type),
@@ -34,8 +35,10 @@ enum Type {
   NIL = 0,
   INTEGER,
   ATOM,
+  UNCHECK_VAR,
   UNCHECK_FUNC,
   DUMP,
+  VAR,
   FUNC,
   C_FUNC,
   TYPE,

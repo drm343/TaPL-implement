@@ -14,6 +14,11 @@ void debug_code(struct SECD *secd_machine) {
     else if(cell->type == ATOM) {
       printf("%s:atom! ", cell->content.string);
     }
+    else if(cell->type == UNCHECK_VAR) {
+      struct BaseList *list = cell->content.list;
+      struct BaseCell *car = list->car;
+      printf("%s:var! ", car->content.string);
+    }
     else if(cell->type == UNCHECK_FUNC) {
       struct BaseList *list = cell->content.list;
       struct BaseCell *func = list->cdr;
@@ -126,6 +131,23 @@ void debug_item(struct BaseCell *cell, int16_t count) {
     printf("-> cdr ");
     debug_item(cdr, count + 1);
   }
+  else if(cell->type == UNCHECK_VAR) {
+    struct BaseList *list = cell->content.list;
+    struct BaseCell *car = list->car;
+    struct BaseCell *cdr = list->cdr;
+
+    printf("%d uncheck_var!\n", count);
+    for(int16_t i = 0; i < count; i++) {
+      printf("  ");
+    }
+    printf("-> car ");
+    debug_item(car, count + 1);
+    for(int16_t i = 0; i < count; i++) {
+      printf("  ");
+    }
+    printf("-> cdr ");
+    debug_item(cdr, count + 1);
+  }
   else if(cell->type == LIST) {
     struct BaseList *list = cell->content.list;
     struct BaseCell *car = list->car;
@@ -145,6 +167,23 @@ void debug_item(struct BaseCell *cell, int16_t count) {
   }
   else if(cell->type == FUNC) {
     printf("%d pointer:func! %p\n", count, (void *)(cell->content.func));
+  }
+  else if(cell->type == VAR) {
+    struct BaseList *list = cell->content.list;
+    struct BaseCell *car = list->car;
+    struct BaseCell *cdr = list->cdr;
+
+    printf("%d pointer:var! %p\n", count, cell->content.pointer);
+    for(int16_t i = 0; i < count; i++) {
+      printf("  ");
+    }
+    printf("  -> car ");
+    debug_item(car, count + 1);
+    for(int16_t i = 0; i < count; i++) {
+      printf("  ");
+    }
+    printf("  -> cdr ");
+    debug_item(cdr, count + 1);
   }
   else {
     printf("%d undef\n", count);
