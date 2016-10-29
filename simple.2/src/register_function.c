@@ -24,34 +24,6 @@ void nil(struct SECD *machine) {
   set_stack_next(machine, cell);
 }
 
-void is_atom(struct SECD *machine) {
-  struct BaseCell *cell = pop_code_next(machine);
-
-  if(cell == NULL) {
-    SECD_MACHINE_NS(error)(machine, "no value");
-    return;
-  }
-  else if(cell->type == ATOM) {
-    printf("%s is atom\n", cell->content.string);
-    drop_atom(machine, cell);
-  }
-  else if(cell->type == NIL) {
-    drop_integer(machine, cell);
-    SECD_MACHINE_NS(error)(machine, "not atom");
-    return;
-  }
-  else if(cell->type == INTEGER) {
-    drop_integer(machine, cell);
-    SECD_MACHINE_NS(error)(machine, "not atom");
-    return;
-  }
-  else if(cell->type == LIST) {
-    drop_list(machine, cell);
-    SECD_MACHINE_NS(error)(machine, "not atom");
-    return;
-  }
-}
-
 void add(struct SECD *machine) {
   int64_t a = 0;
   int64_t b = 0;
@@ -136,7 +108,6 @@ void register_function(struct SECD *machine) {
   strncpy(x, "hello", sizeof("hello"));
 
   ADD_FUNCTION(machine, "nil: func [ -> bottom! ]", nil);
-  ADD_FUNCTION(machine, "atom?: func [ any! -> bool! ]", is_atom);
   ADD_FUNCTION(machine, "test1: func [ int! atom! -> bottom! ]", test1);
   ADD_FUNCTION(machine, "show: func [ atom! -> bottom! ]", show);
   ADD_FUNCTION(machine, "hello: func [ -> bottom! ]", hello);
