@@ -431,10 +431,7 @@ void typecheck_function(struct SECD *secd_machine, struct BaseCell *current,
 
     return_type = get_return_type(unchecked_type);
 
-    if(tmp_type->content.integer == TYPE_ANY) {
-      drop_cell(secd_machine, tmp_type);
-    }
-    else if(tmp_type->content.integer != return_type->content.integer) {
+    if(tmp_type->content.integer != return_type->content.integer) {
       printf("except type %s but you give type %s\n",
           type_of(secd_machine, tmp_type->content.integer),
           type_of(secd_machine, return_type->content.integer));
@@ -481,9 +478,7 @@ void typecheck_variable(struct SECD *secd_machine, struct BaseCell *current,
 
     return_type = get_return_type(unchecked_type);
 
-    if(tmp_type->content.integer == TYPE_ANY) {
-    }
-    else if(tmp_type->content.integer != return_type->content.integer) {
+    if(tmp_type->content.integer != return_type->content.integer) {
       printf("except type %s but you give type %s\n",
           type_of(secd_machine, tmp_type->content.integer),
           type_of(secd_machine, return_type->content.integer));
@@ -500,9 +495,7 @@ void typecheck_not_function(struct SECD *secd_machine, int64_t check_type,
   if(tmp_type != NULL) {
     *uncheck_parameter_number = *uncheck_parameter_number - 1;
 
-    if(tmp_type->content.integer == TYPE_ANY) {
-    }
-    else if(tmp_type->content.integer != check_type) {
+    if(tmp_type->content.integer != check_type) {
       printf("except type %s but you give type %s\n",
           type_of(secd_machine, tmp_type->content.integer),
           type_of(secd_machine, check_type));

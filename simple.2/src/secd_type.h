@@ -1,6 +1,5 @@
 #include "secd_struct.h"
 
-#define TYPE_ANY 451
 #define TYPE_BOTTOM 1878
 
 int64_t easy_hash_value(char *);

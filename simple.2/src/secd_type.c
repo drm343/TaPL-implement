@@ -45,7 +45,6 @@ void extendtype_with_value(struct SECD *secd_machine, char *type_string, int64_t
 }
 
 void basetype(struct SECD *secd_machine) {
-  extendtype_with_value(secd_machine, "any!", TYPE_ANY);
   extendtype_with_value(secd_machine, "bottom!", TYPE_BOTTOM);
   extendtype(secd_machine, "atom!");
   extendtype(secd_machine, "int!");
