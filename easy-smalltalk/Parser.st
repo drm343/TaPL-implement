@@ -2,7 +2,7 @@ FileStream fileIn: 'Node.st'.
 
 
 Object subclass: #TokenizeStep.
-TokenizeStep instanceVariableNames: 'number op bracket result'.
+TokenizeStep instanceVariableNames: 'number op bracket expressionEnd result'.
 TokenizeStep class extend [
     new [
         ^(super new init)
@@ -13,6 +13,7 @@ TokenizeStep extend [
         number := '^\s?(\d*)(.*)'.
         op := '^\s?([\+\-\*/])(.*)'.
         bracket := '^\s?([\(\)])(.*)'.
+        expressionEnd := '^\s?(\.)(.*)'.
         result := OrderedCollection new.
         ^self
     ]
@@ -28,17 +29,17 @@ TokenizeStep extend [
     parseNumber: input [
         (input =~ number)
             ifMatched: [:match |
-	        self fixNumberBug: (match at: 1) with: (match at: 2)
+                self fixNumberBug: (match at: 1) with: (match at: 2)
             ]
             ifNotMatched: [self parseOp: input]
     ]
     fixNumberBug: value with: input [
         (value = '')
-	    ifTrue: [self parseOp: input]
-	    ifFalse: [
+            ifTrue: [self parseOp: input]
+            ifFalse: [
                 result add: (NodeNumber set: (value asNumber)).
                 self parseNumber: input
-	    ]
+            ]
     ]
     parseOp: input [
         (input =~ op)
@@ -52,6 +53,14 @@ TokenizeStep extend [
         (input =~ bracket)
             ifMatched: [:match |
                 result add: (NodeBracket set: (match at: 1)).
+                self parseNumber: (match at: 2)
+            ]
+            ifNotMatched: [self parseExpressionEnd: input]
+    ]
+    parseExpressionEnd: input [
+        (input =~ expressionEnd)
+            ifMatched: [:match |
+                result add: (NodeExpression set: (match at: 1)).
                 self parseNumber: (match at: 2)
             ]
     ]
@@ -68,7 +77,7 @@ ProcessBracket extend [
     run: input [
         modifyPriority := 0.
         input collect: [:next | self isOp: next].
-	^(input reject: [:next | (next class) = NodeBracket])
+        ^(input reject: [:next | (next class) = NodeBracket])
     ]
     isOp: node [
         ((node class) = NodeOp)
@@ -119,10 +128,21 @@ InfixToPostfixStep extend [
                 result add: value
             ]
             ifFalse: [
-                self isStoreNull: value
+                self isExpression: value
             ]
     ]
-    isStoreNull: value [
+    isExpression: value [
+        (value class) = NodeExpression
+            ifTrue: [
+                result addAll: stack.
+                stack := OrderedCollection new.
+                result add: value
+            ]
+            ifFalse: [
+                self isStackNull: value
+            ]
+    ]
+    isStackNull: value [
         ((stack size) = 0)
             ifTrue: [
                 stack addFirst: value
@@ -173,7 +193,7 @@ LittleStackMachine extend [
             ifTrue: [ stack add: value ]
             ifFalse: [ self processOp: value ]
     ]
-    processOp: op[
+    processOp: op [
         ((op class) = NodeOp)
             ifTrue: [
                 self processAdd: op;
@@ -181,6 +201,11 @@ LittleStackMachine extend [
                 processMul: op;
                 processDiv: op.
             ]
+            ifFalse: [ self processExpression: op ]
+    ]
+    processExpression: value [
+        ((value class) = NodeExpression)
+            ifTrue: [ (stack removeLast) printNl ]
     ]
     processAdd: op [
         |r1 r2|
@@ -246,6 +271,6 @@ Parser extend [
         result := step2 run: result.
         result := step3 run: result.
         result := step4 run: result.
-        ^(result at: 1)
+        ^result
     ]
 ]

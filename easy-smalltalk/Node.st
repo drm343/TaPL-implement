@@ -23,6 +23,9 @@ BaseNode extend [
     printNl [
         ('(%1 %2) ' % {type . value}) printNl
     ]
+    asString [
+        ^('(%1 %2) ' % {type . value})
+    ]
     priority [^priority]
     value [^value]
     isSmallerPriority: object [
@@ -36,7 +39,7 @@ BaseNode extend [
     ]
     addPriority: value [
         priority := priority + value.
-	^self
+        ^self
     ]
 ]
 
@@ -75,9 +78,9 @@ NodeOp extend [
         (value = '-')
             ifTrue: [priority := 1].
         (value = '*')
-            ifTrue: [priority := 2].
+            ifTrue: [priority := 1].
         (value = '/')
-            ifTrue: [priority := 2].
+            ifTrue: [priority := 1].
         ^self
     ]
 ]
@@ -92,8 +95,19 @@ NodeBracket class extend [
 NodeBracket extend [
     init [
         super init.
-	priority := 10.
+        priority := 10.
         type := 'bracket'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeExpression.
+NodeExpression extend [
+    init [
+        super init.
+priority := 0.
+        type := 'expression-end'.
         ^self
     ]
 ]
