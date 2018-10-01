@@ -17,5 +17,13 @@ parser run: 'a := b + 2.'.
 'result: get-b 2 + set-a .' printNl.
 parser run: 'a := 2 + b.'.
 'result: 2 b + set-a .' printNl.
-parser run: 'a := b.'.
-'result: get-b set-a .' printNl.
+parser run: 'c := [:x | x].'.
+'result: [ :x | x ] set-c .' printNl.
+parser run: 'c := [:x | x + 1].'.
+'result: [ :x | x 1 + ] set-c .' printNl.
+parser run: 'c := [:x | x + a].'.
+'result: [ :x | x a + ] set-c .' printNl.
+parser run: 'c := [:x | a + x].'.
+'result: [ :x | a x + ] set-c .' printNl.
+parser run: 'c := [:x :y | y + x].'.
+'result: [ :x | y x + ] set-c .' printNl.

@@ -4,6 +4,7 @@ BaseNode class extend [
     set: input [
         |yourself|
         yourself := super new init.
+        comment := 'basenode'.
         ^(yourself set: input)
     ]
     upgradeFrom: node [
@@ -24,7 +25,7 @@ BaseNode extend [
     ]
     setByNode: node [
         value := node value.
-        priority := priority + (node priority).
+        priority := (node priority).
         ^self
     ]
     print [
@@ -55,11 +56,6 @@ BaseNode extend [
 
 
 BaseNode subclass: #NodeNumber.
-NodeNumber class extend [
-    print [
-        'is number' printNl
-    ]
-]
 NodeNumber extend [
     init [
         super init.
@@ -70,11 +66,6 @@ NodeNumber extend [
 
 
 BaseNode subclass: #NodeOp.
-NodeOp class extend [
-    print [
-        'is op' printNl
-    ]
-]
 NodeOp extend [
     init [
         super init.
@@ -86,11 +77,6 @@ NodeOp extend [
 
 
 BaseNode subclass: #NodeAtom.
-NodeAtom class extend [
-    print [
-        'is atom' printNl
-    ]
-]
 NodeAtom extend [
     init [
         super init.
@@ -100,13 +86,8 @@ NodeAtom extend [
 ]
 
 
-NodeAtom subclass: #AssingVariable.
-AssingVariable class extend [
-    print [
-        'assign a variable' printNl
-    ]
-]
-AssingVariable extend [
+NodeAtom subclass: #AssignVariable.
+AssignVariable extend [
     init [
         super init.
         priority := 1.
@@ -116,12 +97,57 @@ AssingVariable extend [
 ]
 
 
-NodeAtom subclass: #NodeVariable.
-NodeVariable class extend [
-    print [
-        'is a variable' printNl
+NodeAtom subclass: #AssignClosure.
+AssignClosure extend [
+    init [
+        super init.
+        priority := 1.
+        type := 'assign-closure'.
+        ^self
     ]
 ]
+
+
+BaseNode subclass: #ClosureBody.
+ClosureBody extend [
+    init [
+        super init.
+        type := 'closure-body'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeClosure.
+NodeClosure instanceVariableNames: 'body'.
+NodeClosure class extend [
+    upgradeFrom: aNode and: anOtherNode [
+        |yourself|
+        yourself := super upgradeFrom: aNode.
+        ^(yourself setBody: anOtherNode)
+    ]
+]
+NodeClosure extend [
+    init [
+        super init.
+        type := 'closure'.
+        ^self
+    ]
+    setBody: aNode [
+        body := aNode.
+        ^self
+    ]
+    body [
+        ^body
+    ]
+    show [
+        body printNl.
+        ^self
+    ]
+]
+
+
+NodeAtom subclass: #NodeVariable.
 NodeVariable extend [
     init [
         super init.
@@ -132,28 +158,7 @@ NodeVariable extend [
 ]
 
 
-NodeAtom subclass: #Variable.
-Variable class extend [
-    print [
-        'is variable' printNl
-    ]
-]
-Variable extend [
-    init [
-        super init.
-        priority := 1.
-        type := 'variable'.
-        ^self
-    ]
-]
-
-
 BaseNode subclass: #NodeAssignment.
-NodeAssignment class extend [
-    print [
-        'is assignment' printNl
-    ]
-]
 NodeAssignment extend [
     init [
         super init.
@@ -164,17 +169,45 @@ NodeAssignment extend [
 ]
 
 
-BaseNode subclass: #NodeBracket.
-NodeBracket class extend [
-    print [
-        'is bracket' printNl
-    ]
-]
-NodeBracket extend [
+BaseNode subclass: #NodeParentheses.
+NodeParentheses extend [
     init [
         super init.
         priority := 10.
-        type := 'bracket'.
+        type := 'parentheses'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeSquareBracket.
+NodeSquareBracket extend [
+    init [
+        super init.
+        priority := 0.
+        type := 'square-bracket'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeParameter.
+NodeParameter extend [
+    init [
+        super init.
+        priority := 0.
+        type := 'parameter'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeClosureSplit.
+NodeClosureSplit extend [
+    init [
+        super init.
+        priority := 0.
+        type := 'closure-split'.
         ^self
     ]
 ]

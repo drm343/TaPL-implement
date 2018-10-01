@@ -1,10 +1,11 @@
 FileStream fileIn: 'Node.st'.
-FileStream fileIn: 'ModifyOrderedCollection.st'.
 FileStream fileIn: 'VariableTable.st'.
+FileStream fileIn: 'FunctionTable.st'.
+FileStream fileIn: 'LittleStackMachine.st'.
 
 
 Object subclass: #Tokenize.
-Tokenize instanceVariableNames: 'number op bracket atom assignment expressionEnd result'.
+Tokenize instanceVariableNames: 'number op parentheses squareBracket parameter closureSplit atom assignment expressionEnd result'.
 Tokenize class extend [
     new [
         ^(super new init)
@@ -16,7 +17,10 @@ Tokenize extend [
         op := '^\s?([\+\-\*/])(.*)'.
         atom := '^\s?(\w+)(.*)'.
         assignment := '^\s?(:=)(.*)'.
-        bracket := '^\s?([\(\)])(.*)'.
+        parentheses := '^\s?([\(\)])(.*)'.
+        squareBracket := '^\s?([\[\]])(.*)'.
+        parameter := '^\s?:(\w+)(.*)'.
+        closureSplit := '^\s?(\|)(.*)'.
         expressionEnd := '^\s?(\.)(.*)'.
         result := OrderedCollection new.
         ^self
@@ -59,12 +63,36 @@ Tokenize extend [
                 result add: (NodeAssignment set: (match at: 1)).
                 self run: (match at: 2)
             ]
-            ifNotMatched: [self parseBracket: input]
+            ifNotMatched: [self parseParentheses: input]
     ]
-    parseBracket: input [
-        (input =~ bracket)
+    parseParentheses: input [
+        (input =~ parentheses)
             ifMatched: [:match |
-                result add: (NodeBracket set: (match at: 1)).
+                result add: (NodeParentheses set: (match at: 1)).
+                self run: (match at: 2)
+            ]
+            ifNotMatched: [self parseSquareBracket: input]
+    ]
+    parseSquareBracket: input [
+        (input =~ squareBracket)
+            ifMatched: [:match |
+                result add: (NodeSquareBracket set: (match at: 1)).
+                self run: (match at: 2)
+            ]
+            ifNotMatched: [self parseParameter: input]
+    ]
+    parseParameter: input [
+        (input =~ parameter)
+            ifMatched: [:match |
+                result add: (NodeParameter set: (match at: 1)).
+                self run: (match at: 2)
+            ]
+            ifNotMatched: [self parseClosureSplit: input]
+    ]
+    parseClosureSplit: input [
+        (input =~ closureSplit)
+            ifMatched: [:match |
+                result add: (NodeClosureSplit set: (match at: 1)).
                 self run: (match at: 2)
             ]
             ifNotMatched: [self parseExpressionEnd: input]
@@ -79,9 +107,9 @@ Tokenize extend [
 ]
 
 
-Object subclass: #ProcessBracket.
-ProcessBracket instanceVariableNames: 'modifyPriority'.
-ProcessBracket extend [
+Object subclass: #ProcessParentheses.
+ProcessParentheses instanceVariableNames: 'modifyPriority'.
+ProcessParentheses extend [
     init [
         modifyPriority := 0.
         ^self
@@ -89,17 +117,17 @@ ProcessBracket extend [
     run: input [
         modifyPriority := 0.
         input collect: [:next | self isOp: next].
-        ^(input reject: [:next | (next class) = NodeBracket])
+        ^(input reject: [:next | (next class) = NodeParentheses])
     ]
     isOp: node [
         ((node class) = NodeOp)
             ifTrue: [
                 ^(node addPriority: modifyPriority)
             ]
-            ifFalse: [^(self isBracket: node)]
+            ifFalse: [^(self isParentheses: node)]
     ]
-    isBracket: node [
-        ((node class) = NodeBracket)
+    isParentheses: node [
+        ((node class) = NodeParentheses)
             ifTrue: [
                 self isLeft: node.
                 self isRight: node.
@@ -168,9 +196,9 @@ Object subclass: #ProcessAtom.
 ProcessAtom instanceVariableNames: 'result'.
 ProcessAtom extend [
     run: input [
-        result := input reduceWith: [:current :next |
-            ((next class) = NodeAssignment)
-                ifTrue: [AssingVariable upgradeFrom: current]
+        result := input collectWithNext: [:current :next |
+            ((next class) = NodeAssignment) & (current class = NodeAtom)
+                ifTrue: [AssignVariable upgradeFrom: current]
                 ifFalse: [current]
         ].
         result := result collect: [:current |
@@ -179,6 +207,20 @@ ProcessAtom extend [
                 ifFalse: [current]
         ].
         ^(result reject: [:next | (next class) = NodeAssignment])
+    ]
+]
+
+
+Object subclass: #ProcessClosure.
+ProcessClosure instanceVariableNames: 'result'.
+ProcessClosure extend [
+    run: input [
+        result := input collectWithNext: [:current :next |
+            ((next class) = NodeSquareBracket) & (current class = AssignVariable)
+                ifTrue: [AssignClosure upgradeFrom: current]
+                ifFalse: [current]
+        ].
+        ^result
     ]
 ]
 
@@ -195,7 +237,16 @@ ReplaceVariable extend [
     ]
     isAssignVariable: input [
         |value|
-        ((input class) = AssingVariable)
+        ((input class) = AssignVariable)
+            ifTrue: [
+                value := table add: (input value).
+                ^(input set: value)
+            ]
+            ifFalse: [^(self isParameter: input)]
+    ]
+    isParameter: input [
+        |value|
+        ((input class) = NodeParameter)
             ifTrue: [
                 value := table add: (input value).
                 ^(input set: value)
@@ -207,6 +258,28 @@ ReplaceVariable extend [
         ((input class) = NodeVariable)
             ifTrue: [
                 value := table find: (input value).
+                ^(input set: value)
+            ]
+            ifFalse: [^input]
+    ]
+]
+
+
+Object subclass: #ReplaceClosure.
+ReplaceClosure instanceVariableNames: 'table'.
+ReplaceClosure extend [
+    init [
+        table := FunctionTable init.
+        ^self
+    ]
+    run: input [
+        ^(input collect: [:current | self isAssignClosure: current])
+    ]
+    isAssignClosure: input [
+        |value|
+        ((input class) = AssignClosure)
+            ifTrue: [
+                value := table add: (input value).
                 ^(input set: value)
             ]
             ifFalse: [^input]
@@ -293,100 +366,72 @@ InfixToPostfix extend [
 ]
 
 
-Object subclass: #LittleStackMachine.
-LittleStackMachine instanceVariableNames: 'stack data'.
-LittleStackMachine extend [
-    init [
-        data := OrderedCollection new.
-        ^self
-    ]
+Object subclass: #RemoveClosureSplit.
+RemoveClosureSplit extend [
     run: input [
-        stack := OrderedCollection new.
-        input collect: [:next | self processNumber: next].
-        ^stack
+        ^(input reject: [:next | (next class) = NodeClosureSplit])
     ]
-    processNumber: value [
-        ((value class) = NodeNumber)
-            ifTrue: [ stack add: value ]
-            ifFalse: [ self processOp: value ]
+]
+
+
+Object subclass: #RemoveClosureSplit.
+RemoveClosureSplit extend [
+    run: input [
+        ^(input reject: [:next | (next class) = NodeClosureSplit])
     ]
-    processOp: op [
-        ((op class) = NodeOp)
+]
+
+
+Object subclass: #StoreClosure.
+StoreClosure instanceVariableNames: 'result stack turn'.
+StoreClosure extend [
+    run: input [
+        turn := false.
+        result := OrderedCollection new.
+        input collect: [:current | self isLeftBracket: current].
+        result := result collectWithNext: [:current :next |
+            ((next class) = ClosureBody) & (current class = AssignClosure)
+                ifTrue: [NodeClosure upgradeFrom: current and: next]
+                ifFalse: [current]
+        ].
+        ^(result reject: [:current | (current class) = ClosureBody])
+    ]
+    isLeftBracket: input [
+        ((input class) = NodeSquareBracket) & (input value = '[')
             ifTrue: [
-                self processAdd: op;
-                processSub: op;
-                processMul: op;
-                processDiv: op.
+                turn := true.
+                stack := OrderedCollection new
             ]
-            ifFalse: [ self processAssingVariable: op ]
-    ]
-    processAssingVariable: variable [
-        ((variable class) = AssingVariable)
-            ifTrue: [
-                (variable value) > (data size)
-                    ifTrue: [
-                        data := OrderedCollection copyFrom: data withSize: (variable value).
-                    ].
-                data at: (variable value) put: (stack last copy).
+            ifFalse: [
+                self isRightBracket: input
             ]
-            ifFalse: [ self processVariable: variable ]
     ]
-    processVariable: variable [
-        ((variable class) = NodeVariable)
+    isRightBracket: input [
+        ((input class) = NodeSquareBracket) & (input value = ']')
             ifTrue: [
-                stack add: (data at: (variable value) copy).
+                turn := false.
+                result add: (ClosureBody set: stack).
+                stack := OrderedCollection new
             ]
-            ifFalse: [ self processExpression: variable ]
+            ifFalse: [
+                self isTurnOn: input
+            ]
     ]
-    processExpression: value [
-        ((value class) = NodeExpression)
-            ifTrue: [ (stack removeLast) printNl ]
-    ]
-    processAdd: op [
-        |r1 r2|
-        ((op value) = '+')
+    isTurnOn: input [
+        turn
             ifTrue: [
-                r2 := stack removeLast value.
-                r1 := stack removeLast value.
-                stack add: (NodeNumber set: (r1 + r2))
-            ].
-        ^self
-    ]
-    processSub: op [
-        |r1 r2|
-        ((op value) = '-')
-            ifTrue: [
-                r2 := stack removeLast value.
-                r1 := stack removeLast value.
-                stack add: (NodeNumber set: (r1 - r2))
-            ].
-        ^self
-    ]
-    processMul: op [
-        |r1 r2|
-        ((op value) = '*')
-            ifTrue: [
-                r2 := stack removeLast value.
-                r1 := stack removeLast value.
-                stack add: (NodeNumber set: (r1 * r2))
-            ].
-        ^self
-    ]
-    processDiv: op [
-        |r1 r2|
-        ((op value) = '/')
-            ifTrue: [
-                r2 := stack removeLast value.
-                r1 := stack removeLast value.
-                stack add: (NodeNumber set: (r1 / r2))
-            ].
-        ^self
+                stack add: input
+            ]
+            ifFalse: [
+                result add: input
+            ]
     ]
 ]
 
 
 Object subclass: #Parser.
-Parser instanceVariableNames: 'step1 step2 step3 step4 replaceStep step6 virtualMachine'.
+Parser instanceVariableNames: 'step1 step2 step3 step4 replaceVariable step6
+processClosure replaceClosure removeClosureSplit storeClosure virtualMachine'.
 Parser class extend [
     new [
         ^(super new init)
@@ -395,11 +440,15 @@ Parser class extend [
 Parser extend [
     init [
         step1 := Tokenize new.
-        step2 := ProcessBracket new.
+        step2 := ProcessParentheses new.
         step3 := ProcessAssignmentPriority new.
         step4 := ProcessAtom new.
-        replaceStep := ReplaceVariable new init.
+        processClosure := ProcessClosure new.
+        replaceVariable := ReplaceVariable new init.
+        replaceClosure := ReplaceClosure new init.
         step6 := InfixToPostfix new.
+        removeClosureSplit := RemoveClosureSplit new.
+        storeClosure := StoreClosure new.
         virtualMachine := LittleStackMachine new init.
         ^self
     ]
@@ -410,8 +459,12 @@ Parser extend [
         result := step2 run: result.
         result := step3 run: result.
         result := step4 run: result.
-        result := replaceStep run: result.
+        result := processClosure run: result.
+        result := replaceVariable run: result.
+        result := replaceClosure run: result.
         result := step6 run: result.
+        result := removeClosureSplit run: result.
+        result := storeClosure run: result.
         result := virtualMachine run: result.
         result printNl.
         ^result

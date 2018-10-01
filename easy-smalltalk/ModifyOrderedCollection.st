@@ -1,9 +1,4 @@
 OrderedCollection class extend [
-    copyFrom: aCollection withSize: aSize [
-        |result|
-        result := (Interval from: 1 to: (aSize - aCollection size)) asOrderedCollection collect: [:reset | 0].
-        ^(aCollection , result)
-    ]
 ]
 OrderedCollection extend [
     printNl [
@@ -12,7 +7,7 @@ OrderedCollection extend [
         self collect: [:next | result := '%1 %2' % {result . next asString}].
         result printNl
     ]
-    reduceWith: function [
+    collectWithNext: function [
         |result interval|
         result := OrderedCollection new.
         interval := Interval from: 1 to: (self size).
@@ -26,5 +21,10 @@ OrderedCollection extend [
                 ]
         ].
         ^result
+    ]
+    resetSize: aSize [
+        |result|
+        result := (Interval from: 1 to: (aSize - self size)) asOrderedCollection collect: [:reset | 0].
+        ^(self , result)
     ]
 ]
