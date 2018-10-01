@@ -1,17 +1,21 @@
 FileStream fileIn: 'Node.st'.
+FileStream fileIn: 'ModifyOrderedCollection.st'.
+FileStream fileIn: 'VariableTable.st'.
 
 
-Object subclass: #TokenizeStep.
-TokenizeStep instanceVariableNames: 'number op bracket expressionEnd result'.
-TokenizeStep class extend [
+Object subclass: #Tokenize.
+Tokenize instanceVariableNames: 'number op bracket atom assignment expressionEnd result'.
+Tokenize class extend [
     new [
         ^(super new init)
     ]
 ]
-TokenizeStep extend [
+Tokenize extend [
     init [
-        number := '^\s?(\d*)(.*)'.
+        number := '^\s?(\d+)(.*)'.
         op := '^\s?([\+\-\*/])(.*)'.
+        atom := '^\s?(\w+)(.*)'.
+        assignment := '^\s?(:=)(.*)'.
         bracket := '^\s?([\(\)])(.*)'.
         expressionEnd := '^\s?(\.)(.*)'.
         result := OrderedCollection new.
@@ -22,30 +26,38 @@ TokenizeStep extend [
         ^self
     ]
     run: input [
-        input printNl.
         self parseNumber: input.
         ^(result)
     ]
     parseNumber: input [
         (input =~ number)
             ifMatched: [:match |
-                self fixNumberBug: (match at: 1) with: (match at: 2)
+                result add: (NodeNumber set: ((match at: 1) asNumber)).
+                self run: (match at: 2)
+            ]
+            ifNotMatched: [self parseAtom: input]
+    ]
+    parseAtom: input [
+        (input =~ atom)
+            ifMatched: [:match |
+                result add: (NodeAtom set: (match at: 1)).
+                self run: (match at: 2)
             ]
             ifNotMatched: [self parseOp: input]
-    ]
-    fixNumberBug: value with: input [
-        (value = '')
-            ifTrue: [self parseOp: input]
-            ifFalse: [
-                result add: (NodeNumber set: (value asNumber)).
-                self parseNumber: input
-            ]
     ]
     parseOp: input [
         (input =~ op)
             ifMatched: [:match |
                 result add: (NodeOp set: (match at: 1)).
-                self parseNumber: (match at: 2)
+                self run: (match at: 2)
+            ]
+            ifNotMatched: [self parseAssignment: input]
+    ]
+    parseAssignment: input [
+        (input =~ assignment)
+            ifMatched: [:match |
+                result add: (NodeAssignment set: (match at: 1)).
+                self run: (match at: 2)
             ]
             ifNotMatched: [self parseBracket: input]
     ]
@@ -53,7 +65,7 @@ TokenizeStep extend [
         (input =~ bracket)
             ifMatched: [:match |
                 result add: (NodeBracket set: (match at: 1)).
-                self parseNumber: (match at: 2)
+                self run: (match at: 2)
             ]
             ifNotMatched: [self parseExpressionEnd: input]
     ]
@@ -61,7 +73,7 @@ TokenizeStep extend [
         (input =~ expressionEnd)
             ifMatched: [:match |
                 result add: (NodeExpression set: (match at: 1)).
-                self parseNumber: (match at: 2)
+                self run: (match at: 2)
             ]
     ]
 ]
@@ -110,9 +122,101 @@ ProcessBracket extend [
 ]
 
 
-Object subclass: #InfixToPostfixStep.
-InfixToPostfixStep instanceVariableNames: 'stack result'.
-InfixToPostfixStep extend [
+Object subclass: #ProcessAssignmentPriority.
+ProcessAssignmentPriority instanceVariableNames: 'modifyPriority'.
+ProcessAssignmentPriority extend [
+    init [
+        modifyPriority := 0.
+        ^self
+    ]
+    run: input [
+        modifyPriority := 0.
+        ^(input collect: [:next | self isOp: next])
+    ]
+    isOp: node [
+        ((node class) = NodeOp)
+            ifTrue: [
+                ^(node addPriority: modifyPriority)
+            ]
+            ifFalse: [^(self isExpressionEnd: node)]
+    ]
+    isExpressionEnd: node [
+        ((node class) = NodeExpression)
+            ifTrue: [
+                modifyPriority := 0.
+                ^node
+            ]
+            ifFalse: [^(self isAssignment: node)]
+    ]
+    isAssignment: node [
+        ((node value) = ':=')
+            ifTrue: [
+                modifyPriority := modifyPriority + (node priority).
+                ^node
+            ]
+            ifFalse: [
+                ^(self isOthers: node)
+            ]
+    ]
+    isOthers: node [
+        ^node
+    ]
+]
+
+
+Object subclass: #ProcessAtom.
+ProcessAtom instanceVariableNames: 'result'.
+ProcessAtom extend [
+    run: input [
+        result := input reduceWith: [:current :next |
+            ((next class) = NodeAssignment)
+                ifTrue: [AssingVariable upgradeFrom: current]
+                ifFalse: [current]
+        ].
+        result := result collect: [:current |
+            ((current class) = NodeAtom)
+                ifTrue: [NodeVariable upgradeFrom: current]
+                ifFalse: [current]
+        ].
+        ^(result reject: [:next | (next class) = NodeAssignment])
+    ]
+]
+
+
+Object subclass: #ReplaceVariable.
+ReplaceVariable instanceVariableNames: 'table'.
+ReplaceVariable extend [
+    init [
+        table := VariableTable init.
+        ^self
+    ]
+    run: input [
+        ^(input collect: [:current | self isAssignVariable: current])
+    ]
+    isAssignVariable: input [
+        |value|
+        ((input class) = AssingVariable)
+            ifTrue: [
+                value := table add: (input value).
+                ^(input set: value)
+            ]
+            ifFalse: [^(self isNodeVariable: input)]
+    ]
+    isNodeVariable: input [
+        |value|
+        ((input class) = NodeVariable)
+            ifTrue: [
+                value := table find: (input value).
+                ^(input set: value)
+            ]
+            ifFalse: [^input]
+    ]
+]
+
+
+Object subclass: #InfixToPostfix.
+InfixToPostfix instanceVariableNames: 'stack result'.
+InfixToPostfix extend [
     run: input [
         result := OrderedCollection new.
         stack := OrderedCollection new.
@@ -124,6 +228,15 @@ InfixToPostfixStep extend [
     ]
     isNumber: value [
         (value class) = NodeNumber
+            ifTrue: [
+                result add: value
+            ]
+            ifFalse: [
+                self isVariable: value
+            ]
+    ]
+    isVariable: value [
+        (value class) = NodeVariable
             ifTrue: [
                 result add: value
             ]
@@ -181,8 +294,12 @@ InfixToPostfixStep extend [
 
 
 Object subclass: #LittleStackMachine.
-LittleStackMachine instanceVariableNames: 'stack'.
+LittleStackMachine instanceVariableNames: 'stack data'.
 LittleStackMachine extend [
+    init [
+        data := OrderedCollection new.
+        ^self
+    ]
     run: input [
         stack := OrderedCollection new.
         input collect: [:next | self processNumber: next].
@@ -201,7 +318,25 @@ LittleStackMachine extend [
                 processMul: op;
                 processDiv: op.
             ]
-            ifFalse: [ self processExpression: op ]
+            ifFalse: [ self processAssingVariable: op ]
+    ]
+    processAssingVariable: variable [
+        ((variable class) = AssingVariable)
+            ifTrue: [
+                (variable value) > (data size)
+                    ifTrue: [
+                        data := OrderedCollection copyFrom: data withSize: (variable value).
+                    ].
+                data at: (variable value) put: (stack last copy).
+            ]
+            ifFalse: [ self processVariable: variable ]
+    ]
+    processVariable: variable [
+        ((variable class) = NodeVariable)
+            ifTrue: [
+                stack add: (data at: (variable value) copy).
+            ]
+            ifFalse: [ self processExpression: variable ]
     ]
     processExpression: value [
         ((value class) = NodeExpression)
@@ -251,7 +386,7 @@ LittleStackMachine extend [
 
 
 Object subclass: #Parser.
-Parser instanceVariableNames: 'step1 step2 step3 step4'.
+Parser instanceVariableNames: 'step1 step2 step3 step4 replaceStep step6 virtualMachine'.
 Parser class extend [
     new [
         ^(super new init)
@@ -259,18 +394,26 @@ Parser class extend [
 ].
 Parser extend [
     init [
-        step1 := TokenizeStep new.
+        step1 := Tokenize new.
         step2 := ProcessBracket new.
-        step3 := InfixToPostfixStep new.
-        step4 := LittleStackMachine new.
+        step3 := ProcessAssignmentPriority new.
+        step4 := ProcessAtom new.
+        replaceStep := ReplaceVariable new init.
+        step6 := InfixToPostfix new.
+        virtualMachine := LittleStackMachine new init.
         ^self
     ]
     run: input [
         |result|
+        input printNl.
         result := step1 reset; run: input.
         result := step2 run: result.
         result := step3 run: result.
         result := step4 run: result.
+        result := replaceStep run: result.
+        result := step6 run: result.
+        result := virtualMachine run: result.
+        result printNl.
         ^result
     ]
 ]

@@ -6,6 +6,11 @@ BaseNode class extend [
         yourself := super new init.
         ^(yourself set: input)
     ]
+    upgradeFrom: node [
+        |yourself|
+        yourself := super new init.
+        ^(yourself setByNode: node)
+    ]
 ]
 BaseNode extend [
     init [
@@ -17,14 +22,19 @@ BaseNode extend [
         value := input.
         ^self
     ]
+    setByNode: node [
+        value := node value.
+        priority := priority + (node priority).
+        ^self
+    ]
     print [
-        ('(%1 %2) ' % {type . value}) print
+        ('(%1 %2 %3) ' % {type . value . priority}) print
     ]
     printNl [
-        ('(%1 %2) ' % {type . value}) printNl
+        ('(%1 %2 %3) ' % {type . value . priority}) printNl
     ]
     asString [
-        ^('(%1 %2) ' % {type . value})
+        ^('(%1 %2 %3) ' % {type . value . priority})
     ]
     priority [^priority]
     value [^value]
@@ -69,18 +79,86 @@ NodeOp extend [
     init [
         super init.
         type := 'op'.
+        priority := 2.
         ^self
     ]
-    set: input [
-        super set: input.
-        (value = '+')
-            ifTrue: [priority := 1].
-        (value = '-')
-            ifTrue: [priority := 1].
-        (value = '*')
-            ifTrue: [priority := 1].
-        (value = '/')
-            ifTrue: [priority := 1].
+]
+
+
+BaseNode subclass: #NodeAtom.
+NodeAtom class extend [
+    print [
+        'is atom' printNl
+    ]
+]
+NodeAtom extend [
+    init [
+        super init.
+        type := 'atom'.
+        ^self
+    ]
+]
+
+
+NodeAtom subclass: #AssingVariable.
+AssingVariable class extend [
+    print [
+        'assign a variable' printNl
+    ]
+]
+AssingVariable extend [
+    init [
+        super init.
+        priority := 1.
+        type := 'assign-variable'.
+        ^self
+    ]
+]
+
+
+NodeAtom subclass: #NodeVariable.
+NodeVariable class extend [
+    print [
+        'is a variable' printNl
+    ]
+]
+NodeVariable extend [
+    init [
+        super init.
+        priority := 0.
+        type := 'variable'.
+        ^self
+    ]
+]
+
+
+NodeAtom subclass: #Variable.
+Variable class extend [
+    print [
+        'is variable' printNl
+    ]
+]
+Variable extend [
+    init [
+        super init.
+        priority := 1.
+        type := 'variable'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeAssignment.
+NodeAssignment class extend [
+    print [
+        'is assignment' printNl
+    ]
+]
+NodeAssignment extend [
+    init [
+        super init.
+        type := 'assignment'.
+        priority := 10.
         ^self
     ]
 ]
@@ -106,7 +184,7 @@ BaseNode subclass: #NodeExpression.
 NodeExpression extend [
     init [
         super init.
-priority := 0.
+        priority := 0.
         type := 'expression-end'.
         ^self
     ]

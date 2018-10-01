@@ -1,6 +1,7 @@
 VM=gst
+LOG=result.log
 
 all: test
 
 test:
-	$(VM) Test.st
+	$(VM) Test.st > $(LOG)
