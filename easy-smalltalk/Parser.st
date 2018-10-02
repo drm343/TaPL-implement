@@ -501,7 +501,16 @@ InfixToPostfix extend [
             ]
     ]
     isClosureSplit: value [
-        (value class) = NodeClosureSplit
+        (value class = NodeClosureSplit)
+            ifTrue: [
+                result add: value
+            ]
+            ifFalse: [
+                self isMessage: value
+            ]
+    ]
+    isMessage: value [
+        (value class = NodeMergedMessage)
             ifTrue: [
                 result add: value
             ]
@@ -558,6 +567,52 @@ InfixToPostfix extend [
 ]
 
 
+Object subclass: #ReverseParameter.
+ReverseParameter instanceVariableNames: 'result'.
+ReverseParameter extend [
+    run: input [
+        result := OrderedCollection new.
+        input collect: [:current | self isAssignClosure: current].
+        ^result
+    ]
+    reverse: input [
+        |code|
+        code := OrderedCollection new.
+        input collect: [:current |
+            (current class = NodeParameter)
+                ifTrue: [code addFirst: current]
+                ifFalse: [code add: current]
+        ].
+        ^code
+    ]
+    isAssignClosure: input [
+        |value|
+        (input class = NodeClosure)
+            ifTrue: [
+                value := (self reverse: (input body)).
+                result add: (input setBody: value).
+            ]
+            ifFalse: [
+                self isAnonymousExecuteClosure: input
+            ]
+    ]
+    isAnonymousExecuteClosure: input [
+        |value|
+        (input class = AnonymousExecuteClosure)
+            ifTrue: [
+                value := (self reverse: (input value)).
+                result add: (input set: value).
+            ]
+            ifFalse: [
+                self isOthers: input
+            ]
+    ]
+    isOthers: input [
+        result add: input
+    ]
+]
+
+
 Object subclass: #RemoveClosureSplit.
 RemoveClosureSplit instanceVariableNames: 'result'.
 RemoveClosureSplit extend [
@@ -599,7 +654,7 @@ RemoveClosureSplit extend [
 
 Object subclass: #Parser.
 Parser instanceVariableNames: 'step1 step2 step3 step4 replaceVariable infixToPostfixStep
-mergeMessage processClosurePriority
+mergeMessage processClosurePriority reverseParameter
 processClosure removeClosureSplit virtualMachine'.
 Parser class extend [
     new [
@@ -617,13 +672,13 @@ Parser extend [
         replaceVariable := ReplaceVariable new init.
         processClosurePriority := ProcessClosurePriority new.
         infixToPostfixStep := InfixToPostfix new.
+        reverseParameter := ReverseParameter new.
         removeClosureSplit := RemoveClosureSplit new.
         virtualMachine := LittleStackMachine new init.
         ^self
     ]
     run: input [
         |result|
-        input printNl.
         result := step1 reset; run: input.
         result := step2 run: result.
         result := step3 run: result.
@@ -633,14 +688,16 @@ Parser extend [
         result := replaceVariable run: result.
         result := processClosurePriority run: result.
         result := infixToPostfixStep reset; run: result.
+        result := reverseParameter run: result.
         result := removeClosureSplit run: result.
         result := virtualMachine run: result.
         ^result
     ]
     runAndPrint: input [
         |result|
+        input printNl.
         result := self run: input.
         result printNl.
-	^result
+        ^result
     ]
 ]

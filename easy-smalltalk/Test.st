@@ -10,7 +10,9 @@ parser runAndPrint: 'b := [:x | x + a].'.
 parser runAndPrint: 'c := [:x | x].'.
 parser runAndPrint: 'c := [:x | x] value: 3.'.
 parser runAndPrint: 'c := [:x | x + a] value: 10.'.
+parser runAndPrint: 'd := [:x :y | x - y].'.
 parser runAndPrint: 'a := 5.'.
 parser runAndPrint: '[:x | x + a] value: 10.'.
 parser runAndPrint: 'c.'.
 parser runAndPrint: 'b value: 20.'.
+parser runAndPrint: 'd value: 20 value: 30.'.

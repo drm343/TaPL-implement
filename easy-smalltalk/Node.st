@@ -114,6 +114,14 @@ AnonymousExecuteClosure extend [
         type := 'anonymous-execute-closure'.
         ^self
     ]
+    asString [
+        |result|
+        result := ''.
+        value collect: [ :current |
+            result := ('%1 %2' % {result . current asString})
+        ].
+        ^('(%1 (%2) %3) ' % {type . result . priority})
+    ]
 ]
 
 
