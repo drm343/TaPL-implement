@@ -50,7 +50,41 @@ LittleStackMachine extend [
                 code at: (closure value) put: (closure body copy).
                 stack add: (NodeNumber set: (closure value))
             ]
-            ifFalse: [ self processVariable: closure]
+            ifFalse: [ self processExecuteClosure: closure]
+    ]
+    processExecuteClosure: closure [
+        |executeCode|
+        (closure class = ExecuteClosure)
+            ifTrue: [
+                executeCode := (code at: (closure value)) copy.
+                executeCode collect: [:current | self processNumber: current].
+            ]
+            ifFalse: [self processAnonymousExecuteClosure: closure]
+    ]
+    processAnonymousExecuteClosure: closure [
+        (closure class = AnonymousExecuteClosure)
+            ifTrue: [
+                (closure value) collect: [:current | self processNumber: current].
+            ]
+            ifFalse: [self processParameter: closure]
+    ]
+    processParameter: parameter [
+        (parameter class = NodeParameter)
+            ifTrue: [
+                (parameter value) > (data size)
+                    ifTrue: [
+                        data := data resetSize: (parameter value).
+                    ].
+                data at: (parameter value) put: (stack removeLast).
+            ]
+            ifFalse: [ self processMessage: parameter]
+    ]
+    processMessage: message [
+        (message class = NodeMergedMessage)
+            ifTrue: [
+                stack add: (message body).
+            ]
+            ifFalse: [ self processVariable: message]
     ]
     processVariable: variable [
         ((variable class) = NodeVariable)

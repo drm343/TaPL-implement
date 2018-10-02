@@ -1,11 +1,10 @@
 FileStream fileIn: 'Node.st'.
 FileStream fileIn: 'VariableTable.st'.
-FileStream fileIn: 'FunctionTable.st'.
 FileStream fileIn: 'LittleStackMachine.st'.
 
 
 Object subclass: #Tokenize.
-Tokenize instanceVariableNames: 'number op parentheses squareBracket parameter closureSplit atom assignment expressionEnd result'.
+Tokenize instanceVariableNames: 'number op message parentheses squareBracket parameter closureSplit atom assignment expressionEnd result'.
 Tokenize class extend [
     new [
         ^(super new init)
@@ -15,6 +14,7 @@ Tokenize extend [
     init [
         number := '^\s?(\d+)(.*)'.
         op := '^\s?([\+\-\*/])(.*)'.
+        message := '^\s?(\w+:)(.*)'.
         atom := '^\s?(\w+)(.*)'.
         assignment := '^\s?(:=)(.*)'.
         parentheses := '^\s?([\(\)])(.*)'.
@@ -37,6 +37,14 @@ Tokenize extend [
         (input =~ number)
             ifMatched: [:match |
                 result add: (NodeNumber set: ((match at: 1) asNumber)).
+                self run: (match at: 2)
+            ]
+            ifNotMatched: [self parseMessage: input]
+    ]
+    parseMessage: input [
+        (input =~ message)
+            ifMatched: [:match |
+                result add: (NodeMessage set: (match at: 1)).
                 self run: (match at: 2)
             ]
             ifNotMatched: [self parseAtom: input]
@@ -211,16 +219,72 @@ ProcessAtom extend [
 ]
 
 
+Object subclass: #MergeMessage.
+MergeMessage instanceVariableNames: 'result stack turn previous'.
+MergeMessage extend [
+    run: input [
+        previous := nil.
+        result := input collectWithNext: [:current :next |
+            (current class = NodeMessage)
+                ifTrue: [previous := (NodeMergedMessage upgradeFrom: current and: next). previous]
+                ifFalse: [
+                    (previous class = NodeMergedMessage)
+                        ifTrue: [previous := current. nil]
+                        ifFalse: [previous := current. current]
+                ]
+        ].
+        ^(result reject: [:current | current = nil])
+    ]
+]
+
+
 Object subclass: #ProcessClosure.
-ProcessClosure instanceVariableNames: 'result'.
+ProcessClosure instanceVariableNames: 'result stack turn'.
 ProcessClosure extend [
     run: input [
-        result := input collectWithNext: [:current :next |
-            ((next class) = NodeSquareBracket) & (current class = AssignVariable)
-                ifTrue: [AssignClosure upgradeFrom: current]
-                ifFalse: [current]
+        turn := false.
+        result := OrderedCollection new.
+        input collect: [:current | self isLeftBracket: current].
+        result := result collectWithNext2Item: [:current :next :next2 |
+            ((next2 class = NodeExpression) & (next class = ClosureBody) & (current class = AssignVariable))
+                ifTrue: [NodeClosure upgradeFrom: current and: (next value)]
+                ifFalse: [
+                    ((next class ~= NodeExpression) & (current class = ClosureBody))
+                        ifTrue: [AnonymousExecuteClosure upgradeFrom: current]
+                        ifFalse: [current].
+                ]
         ].
-        ^result
+        ^(result reject: [:current | (current class) = ClosureBody])
+    ]
+    isLeftBracket: input [
+        ((input class) = NodeSquareBracket) & (input value = '[')
+            ifTrue: [
+                turn := true.
+                stack := OrderedCollection new
+            ]
+            ifFalse: [
+                self isRightBracket: input
+            ]
+    ]
+    isRightBracket: input [
+        ((input class) = NodeSquareBracket) & (input value = ']')
+            ifTrue: [
+                turn := false.
+                result add: (ClosureBody set: stack).
+                stack := OrderedCollection new
+            ]
+            ifFalse: [
+                self isTurnOn: input
+            ]
+    ]
+    isTurnOn: input [
+        turn
+            ifTrue: [
+                stack add: input
+            ]
+            ifFalse: [
+                result add: input
+            ]
     ]
 ]
 
@@ -242,6 +306,26 @@ ReplaceVariable extend [
                 value := table add: (input value).
                 ^(input set: value)
             ]
+            ifFalse: [^(self isAssignClosure: input)]
+    ]
+    isAssignClosure: input [
+        |value|
+        (input class = NodeClosure)
+            ifTrue: [
+                value := table addFuntion: (input value).
+                input set: value.
+                value := self run: (input body).
+                ^(input setBody: value)
+            ]
+            ifFalse: [^(self isAnonymousExecuteClosure: input)]
+    ]
+    isAnonymousExecuteClosure: input [
+        |value|
+        ((input class) = AnonymousExecuteClosure)
+            ifTrue: [
+                value := (self run: (input value)).
+                ^(input set: value)
+            ]
             ifFalse: [^(self isParameter: input)]
     ]
     isParameter: input [
@@ -254,18 +338,21 @@ ReplaceVariable extend [
             ifFalse: [^(self isNodeVariable: input)]
     ]
     isNodeVariable: input [
-        |value|
+        |node|
         ((input class) = NodeVariable)
             ifTrue: [
-                value := table find: (input value).
-                ^(input set: value)
+                node := table find: (input value).
+                input set: (node value).
+                (node isVariable)
+                    ifTrue: [^input]
+                    ifFalse: [^(ExecuteClosure upgradeFrom: input)]
             ]
             ifFalse: [^input]
     ]
 ]
 
 
-Object subclass: #ReplaceClosure.
+"Object subclass: #ReplaceClosure.
 ReplaceClosure instanceVariableNames: 'table'.
 ReplaceClosure extend [
     init [
@@ -273,16 +360,65 @@ ReplaceClosure extend [
         ^self
     ]
     run: input [
-        ^(input collect: [:current | self isAssignClosure: current])
+        ^(input collect: [:current | self isClosure: current])
     ]
-    isAssignClosure: input [
+    isClosure: input [
         |value|
-        ((input class) = AssignClosure)
+        ((input class) = NodeClosure)
             ifTrue: [
                 value := table add: (input value).
                 ^(input set: value)
             ]
             ifFalse: [^input]
+    ]
+]"
+
+
+Object subclass: #ProcessClosurePriority.
+ProcessClosurePriority instanceVariableNames: 'modifyPriority'.
+ProcessClosurePriority extend [
+    run: input [
+        |result|
+        modifyPriority := 0.
+        result := input collect: [:next | self isExpression: next].
+        ^result
+    ]
+    isExpression: node [
+        (node class = NodeExpression)
+            ifTrue: [
+                modifyPriority := 0.
+                ^node
+            ]
+            ifFalse: [^(self isOp: node)]
+    ]
+    isOp: node [
+        (node class = NodeOp)
+            ifTrue: [
+                ^(node addPriority: modifyPriority)
+            ]
+            ifFalse: [^(self isMessage: node)]
+    ]
+    isMessage: node [
+        (node class = NodeMergedMessage)
+            ifTrue: [
+                ^(node addPriority: modifyPriority)
+            ]
+            ifFalse: [^(self isExecuteClosure: node)]
+    ]
+    isExecuteClosure: node [
+        (node class = ExecuteClosure)
+            ifTrue: [
+                modifyPriority := modifyPriority + 10.
+                ^node
+            ]
+            ifFalse: [^(self isAnonymousExecuteClosure: node)]
+    ]
+    isAnonymousExecuteClosure: node [
+        (node class = AnonymousExecuteClosure)
+            ifTrue: [
+                modifyPriority := modifyPriority + 10.
+            ].
+        ^node
     ]
 ]
 
@@ -290,14 +426,52 @@ ReplaceClosure extend [
 Object subclass: #InfixToPostfix.
 InfixToPostfix instanceVariableNames: 'stack result'.
 InfixToPostfix extend [
-    run: input [
+    reset [
         result := OrderedCollection new.
         stack := OrderedCollection new.
+        ^self
+    ]
+    run: input [
         input collect: [ :next |
-            self isNumber: next
+            self isStoredClosure: next
         ].
         result addAll: stack.
         ^result
+    ]
+    isStoredClosure: closure [
+        |yourself body value|
+        (closure class = NodeClosure)
+            ifTrue: [
+                yourself := InfixToPostfix new reset.
+                body := closure body.
+                value := yourself run: body.
+                stack add: (closure setBody: value)
+            ]
+            ifFalse: [
+                self isExecuteClosure: closure
+            ]
+    ]
+    isExecuteClosure: closure [
+        |yourself value|
+        (closure class = ExecuteClosure)
+            ifTrue: [
+                self isStackNull: closure
+            ]
+            ifFalse: [
+                self isAnonymousExecuteClosure: closure
+            ]
+    ]
+    isAnonymousExecuteClosure: closure [
+        |yourself value|
+        ((closure class) = AnonymousExecuteClosure)
+            ifTrue: [
+                yourself := InfixToPostfix new reset.
+                value := (yourself run: (closure value)).
+                self isStackNull: (closure set: value)
+            ]
+            ifFalse: [
+                self isNumber: closure
+            ]
     ]
     isNumber: value [
         (value class) = NodeNumber
@@ -310,6 +484,24 @@ InfixToPostfix extend [
     ]
     isVariable: value [
         (value class) = NodeVariable
+            ifTrue: [
+                result add: value
+            ]
+            ifFalse: [
+                self isParamter: value
+            ]
+    ]
+    isParamter: value [
+        (value class) = NodeParameter
+            ifTrue: [
+                result add: value
+            ]
+            ifFalse: [
+                self isClosureSplit: value
+            ]
+    ]
+    isClosureSplit: value [
+        (value class) = NodeClosureSplit
             ifTrue: [
                 result add: value
             ]
@@ -367,71 +559,48 @@ InfixToPostfix extend [
 
 
 Object subclass: #RemoveClosureSplit.
+RemoveClosureSplit instanceVariableNames: 'result'.
 RemoveClosureSplit extend [
     run: input [
-        ^(input reject: [:next | (next class) = NodeClosureSplit])
-    ]
-]
-
-
-Object subclass: #RemoveClosureSplit.
-RemoveClosureSplit extend [
-    run: input [
-        ^(input reject: [:next | (next class) = NodeClosureSplit])
-    ]
-]
-
-
-Object subclass: #StoreClosure.
-StoreClosure instanceVariableNames: 'result stack turn'.
-StoreClosure extend [
-    run: input [
-        turn := false.
         result := OrderedCollection new.
-        input collect: [:current | self isLeftBracket: current].
-        result := result collectWithNext: [:current :next |
-            ((next class) = ClosureBody) & (current class = AssignClosure)
-                ifTrue: [NodeClosure upgradeFrom: current and: next]
-                ifFalse: [current]
-        ].
-        ^(result reject: [:current | (current class) = ClosureBody])
+        input collect: [:current | self isAssignClosure: current].
+        ^result
     ]
-    isLeftBracket: input [
-        ((input class) = NodeSquareBracket) & (input value = '[')
+    remove: input [
+        ^(input reject: [:current | (current class) = NodeClosureSplit])
+    ]
+    isAssignClosure: input [
+        |value|
+        (input class = NodeClosure)
             ifTrue: [
-                turn := true.
-                stack := OrderedCollection new
+                value := (self remove: (input body)).
+                result add: (input setBody: value).
             ]
             ifFalse: [
-                self isRightBracket: input
+                self isAnonymousExecuteClosure: input
             ]
     ]
-    isRightBracket: input [
-        ((input class) = NodeSquareBracket) & (input value = ']')
+    isAnonymousExecuteClosure: input [
+        |value|
+        (input class = AnonymousExecuteClosure)
             ifTrue: [
-                turn := false.
-                result add: (ClosureBody set: stack).
-                stack := OrderedCollection new
+                value := (self remove: (input value)).
+                result add: (input set: value).
             ]
             ifFalse: [
-                self isTurnOn: input
+                self isOthers: input
             ]
     ]
-    isTurnOn: input [
-        turn
-            ifTrue: [
-                stack add: input
-            ]
-            ifFalse: [
-                result add: input
-            ]
+    isOthers: input [
+        result add: input
     ]
 ]
 
 
 Object subclass: #Parser.
-Parser instanceVariableNames: 'step1 step2 step3 step4 replaceVariable step6
-processClosure replaceClosure removeClosureSplit storeClosure virtualMachine'.
+Parser instanceVariableNames: 'step1 step2 step3 step4 replaceVariable infixToPostfixStep
+mergeMessage processClosurePriority
+processClosure removeClosureSplit virtualMachine'.
 Parser class extend [
     new [
         ^(super new init)
@@ -443,12 +612,12 @@ Parser extend [
         step2 := ProcessParentheses new.
         step3 := ProcessAssignmentPriority new.
         step4 := ProcessAtom new.
+        mergeMessage := MergeMessage new.
         processClosure := ProcessClosure new.
         replaceVariable := ReplaceVariable new init.
-        replaceClosure := ReplaceClosure new init.
-        step6 := InfixToPostfix new.
+        processClosurePriority := ProcessClosurePriority new.
+        infixToPostfixStep := InfixToPostfix new.
         removeClosureSplit := RemoveClosureSplit new.
-        storeClosure := StoreClosure new.
         virtualMachine := LittleStackMachine new init.
         ^self
     ]
@@ -459,14 +628,19 @@ Parser extend [
         result := step2 run: result.
         result := step3 run: result.
         result := step4 run: result.
+        result := mergeMessage run: result.
         result := processClosure run: result.
         result := replaceVariable run: result.
-        result := replaceClosure run: result.
-        result := step6 run: result.
+        result := processClosurePriority run: result.
+        result := infixToPostfixStep reset; run: result.
         result := removeClosureSplit run: result.
-        result := storeClosure run: result.
         result := virtualMachine run: result.
-        result printNl.
         ^result
+    ]
+    runAndPrint: input [
+        |result|
+        result := self run: input.
+        result printNl.
+	^result
     ]
 ]

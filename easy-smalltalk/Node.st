@@ -97,22 +97,31 @@ AssignVariable extend [
 ]
 
 
-NodeAtom subclass: #AssignClosure.
-AssignClosure extend [
+BaseNode subclass: #ClosureBody.
+ClosureBody extend [
     init [
-        super init.
         priority := 1.
-        type := 'assign-closure'.
+        type := 'closure-body'.
         ^self
     ]
 ]
 
 
-BaseNode subclass: #ClosureBody.
-ClosureBody extend [
+BaseNode subclass: #AnonymousExecuteClosure.
+AnonymousExecuteClosure extend [
     init [
-        super init.
-        type := 'closure-body'.
+        priority := 1.
+        type := 'anonymous-execute-closure'.
+        ^self
+    ]
+]
+
+
+BaseNode subclass: #ExecuteClosure.
+ExecuteClosure extend [
+    init [
+        priority := 1.
+        type := 'execute-closure'.
         ^self
     ]
 ]
@@ -198,6 +207,45 @@ NodeParameter extend [
         priority := 0.
         type := 'parameter'.
         ^self
+    ]
+]
+
+
+BaseNode subclass: #NodeMessage.
+NodeMessage extend [
+    init [
+        super init.
+        priority := 0.
+        type := 'message'.
+        ^self
+    ]
+]
+
+
+NodeMessage subclass: #NodeMergedMessage.
+NodeMergedMessage instanceVariableNames: 'body'.
+NodeMergedMessage class extend [
+    upgradeFrom: aNode and: anOtherNode [
+        |yourself|
+        yourself := super upgradeFrom: aNode.
+        yourself setBody: anOtherNode.
+        ^yourself
+    ]
+]
+NodeMergedMessage extend [
+    init [
+        type := 'merged-message'.
+        ^self
+    ]
+    setBody: aBody [
+        body := aBody.
+        ^self
+    ]
+    body [
+        ^body
+    ]
+    asString [
+        ^('(%1 %2 %3 %4) ' % {type . value . priority . body asString})
     ]
 ]
 
