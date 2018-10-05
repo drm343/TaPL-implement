@@ -4,7 +4,7 @@ FileStream fileIn: 'LittleStackMachine.st'.
 
 
 Object subclass: #Tokenize.
-Tokenize instanceVariableNames: 'number op message parentheses squareBracket parameter closureSplit atom assignment expressionEnd result'.
+Tokenize instanceVariableNames: 'number op message parentheses squareBracket parameter funtionSplit atom assignment expressionEnd result'.
 Tokenize class extend [
     new [
         ^(super new init)
@@ -20,7 +20,7 @@ Tokenize extend [
         parentheses := '^\s?([\(\)])(.*)'.
         squareBracket := '^\s?([\[\]])(.*)'.
         parameter := '^\s?:(\w+)(.*)'.
-        closureSplit := '^\s?(\|)(.*)'.
+        funtionSplit := '^\s?(\|)(.*)'.
         expressionEnd := '^\s?(\.)(.*)'.
         result := OrderedCollection new.
         ^self
@@ -95,12 +95,12 @@ Tokenize extend [
                 result add: (NodeParameter set: (match at: 1)).
                 self run: (match at: 2)
             ]
-            ifNotMatched: [self parseClosureSplit: input]
+            ifNotMatched: [self parseFunctionSplit: input]
     ]
-    parseClosureSplit: input [
-        (input =~ closureSplit)
+    parseFunctionSplit: input [
+        (input =~ funtionSplit)
             ifMatched: [:match |
-                result add: (NodeClosureSplit set: (match at: 1)).
+                result add: (NodeFunctionSplit set: (match at: 1)).
                 self run: (match at: 2)
             ]
             ifNotMatched: [self parseExpressionEnd: input]
@@ -238,23 +238,23 @@ MergeMessage extend [
 ]
 
 
-Object subclass: #ProcessClosure.
-ProcessClosure instanceVariableNames: 'result stack turn'.
-ProcessClosure extend [
+Object subclass: #ProcessFunction.
+ProcessFunction instanceVariableNames: 'result stack turn'.
+ProcessFunction extend [
     run: input [
         turn := false.
         result := OrderedCollection new.
         input collect: [:current | self isLeftBracket: current].
         result := result collectWithNext2Item: [:current :next :next2 |
-            ((next2 class = NodeExpression) & (next class = ClosureBody) & (current class = AssignVariable))
-                ifTrue: [NodeClosure upgradeFrom: current and: (next value)]
+            ((next2 class = NodeExpression) & (next class = FunctionBody) & (current class = AssignVariable))
+                ifTrue: [NodeFunction upgradeFrom: current and: (next value)]
                 ifFalse: [
-                    ((next class ~= NodeExpression) & (current class = ClosureBody))
-                        ifTrue: [AnonymousExecuteClosure upgradeFrom: current]
+                    ((next class ~= NodeExpression) & (current class = FunctionBody))
+                        ifTrue: [AnonymousExecuteFunction upgradeFrom: current]
                         ifFalse: [current].
                 ]
         ].
-        ^(result reject: [:current | (current class) = ClosureBody])
+        ^(result reject: [:current | (current class) = FunctionBody])
     ]
     isLeftBracket: input [
         ((input class) = NodeSquareBracket) & (input value = '[')
@@ -270,7 +270,7 @@ ProcessClosure extend [
         ((input class) = NodeSquareBracket) & (input value = ']')
             ifTrue: [
                 turn := false.
-                result add: (ClosureBody set: stack).
+                result add: (FunctionBody set: stack).
                 stack := OrderedCollection new
             ]
             ifFalse: [
@@ -306,22 +306,22 @@ ReplaceVariable extend [
                 value := table add: (input value).
                 ^(input set: value)
             ]
-            ifFalse: [^(self isAssignClosure: input)]
+            ifFalse: [^(self isAssignFunction: input)]
     ]
-    isAssignClosure: input [
+    isAssignFunction: input [
         |value|
-        (input class = NodeClosure)
+        (input class = NodeFunction)
             ifTrue: [
                 value := table addFuntion: (input value).
                 input set: value.
                 value := self run: (input body).
                 ^(input setBody: value)
             ]
-            ifFalse: [^(self isAnonymousExecuteClosure: input)]
+            ifFalse: [^(self isAnonymousExecuteFunction: input)]
     ]
-    isAnonymousExecuteClosure: input [
+    isAnonymousExecuteFunction: input [
         |value|
-        ((input class) = AnonymousExecuteClosure)
+        ((input class) = AnonymousExecuteFunction)
             ifTrue: [
                 value := (self run: (input value)).
                 ^(input set: value)
@@ -345,26 +345,26 @@ ReplaceVariable extend [
                 input set: (node value).
                 (node isVariable)
                     ifTrue: [^input]
-                    ifFalse: [^(ExecuteClosure upgradeFrom: input)]
+                    ifFalse: [^(ExecuteFunction upgradeFrom: input)]
             ]
             ifFalse: [^input]
     ]
 ]
 
 
-"Object subclass: #ReplaceClosure.
-ReplaceClosure instanceVariableNames: 'table'.
-ReplaceClosure extend [
+"Object subclass: #ReplaceFunction.
+ReplaceFunction instanceVariableNames: 'table'.
+ReplaceFunction extend [
     init [
         table := FunctionTable init.
         ^self
     ]
     run: input [
-        ^(input collect: [:current | self isClosure: current])
+        ^(input collect: [:current | self isFunction: current])
     ]
-    isClosure: input [
+    isFunction: input [
         |value|
-        ((input class) = NodeClosure)
+        ((input class) = NodeFunction)
             ifTrue: [
                 value := table add: (input value).
                 ^(input set: value)
@@ -374,9 +374,9 @@ ReplaceClosure extend [
 ]"
 
 
-Object subclass: #ProcessClosurePriority.
-ProcessClosurePriority instanceVariableNames: 'modifyPriority'.
-ProcessClosurePriority extend [
+Object subclass: #ProcessFunctionPriority.
+ProcessFunctionPriority instanceVariableNames: 'modifyPriority'.
+ProcessFunctionPriority extend [
     run: input [
         |result|
         modifyPriority := 0.
@@ -403,18 +403,18 @@ ProcessClosurePriority extend [
             ifTrue: [
                 ^(node addPriority: modifyPriority)
             ]
-            ifFalse: [^(self isExecuteClosure: node)]
+            ifFalse: [^(self isExecuteFunction: node)]
     ]
-    isExecuteClosure: node [
-        (node class = ExecuteClosure)
+    isExecuteFunction: node [
+        (node class = ExecuteFunction)
             ifTrue: [
                 modifyPriority := modifyPriority + 10.
                 ^node
             ]
-            ifFalse: [^(self isAnonymousExecuteClosure: node)]
+            ifFalse: [^(self isAnonymousExecuteFunction: node)]
     ]
-    isAnonymousExecuteClosure: node [
-        (node class = AnonymousExecuteClosure)
+    isAnonymousExecuteFunction: node [
+        (node class = AnonymousExecuteFunction)
             ifTrue: [
                 modifyPriority := modifyPriority + 10.
             ].
@@ -433,44 +433,44 @@ InfixToPostfix extend [
     ]
     run: input [
         input collect: [ :next |
-            self isStoredClosure: next
+            self isStoredFunction: next
         ].
         result addAll: stack.
         ^result
     ]
-    isStoredClosure: closure [
+    isStoredFunction: funtion [
         |yourself body value|
-        (closure class = NodeClosure)
+        (funtion class = NodeFunction)
             ifTrue: [
                 yourself := InfixToPostfix new reset.
-                body := closure body.
+                body := funtion body.
                 value := yourself run: body.
-                stack add: (closure setBody: value)
+                stack add: (funtion setBody: value)
             ]
             ifFalse: [
-                self isExecuteClosure: closure
+                self isExecuteFunction: funtion
             ]
     ]
-    isExecuteClosure: closure [
+    isExecuteFunction: funtion [
         |yourself value|
-        (closure class = ExecuteClosure)
+        (funtion class = ExecuteFunction)
             ifTrue: [
-                self isStackNull: closure
+                self isStackNull: funtion
             ]
             ifFalse: [
-                self isAnonymousExecuteClosure: closure
+                self isAnonymousExecuteFunction: funtion
             ]
     ]
-    isAnonymousExecuteClosure: closure [
+    isAnonymousExecuteFunction: funtion [
         |yourself value|
-        ((closure class) = AnonymousExecuteClosure)
+        ((funtion class) = AnonymousExecuteFunction)
             ifTrue: [
                 yourself := InfixToPostfix new reset.
-                value := (yourself run: (closure value)).
-                self isStackNull: (closure set: value)
+                value := (yourself run: (funtion value)).
+                self isStackNull: (funtion set: value)
             ]
             ifFalse: [
-                self isNumber: closure
+                self isNumber: funtion
             ]
     ]
     isNumber: value [
@@ -497,11 +497,11 @@ InfixToPostfix extend [
                 result add: value
             ]
             ifFalse: [
-                self isClosureSplit: value
+                self isFunctionSplit: value
             ]
     ]
-    isClosureSplit: value [
-        (value class = NodeClosureSplit)
+    isFunctionSplit: value [
+        (value class = NodeFunctionSplit)
             ifTrue: [
                 result add: value
             ]
@@ -572,7 +572,7 @@ ReverseParameter instanceVariableNames: 'result'.
 ReverseParameter extend [
     run: input [
         result := OrderedCollection new.
-        input collect: [:current | self isAssignClosure: current].
+        input collect: [:current | self isAssignFunction: current].
         ^result
     ]
     reverse: input [
@@ -585,20 +585,20 @@ ReverseParameter extend [
         ].
         ^code
     ]
-    isAssignClosure: input [
+    isAssignFunction: input [
         |value|
-        (input class = NodeClosure)
+        (input class = NodeFunction)
             ifTrue: [
                 value := (self reverse: (input body)).
                 result add: (input setBody: value).
             ]
             ifFalse: [
-                self isAnonymousExecuteClosure: input
+                self isAnonymousExecuteFunction: input
             ]
     ]
-    isAnonymousExecuteClosure: input [
+    isAnonymousExecuteFunction: input [
         |value|
-        (input class = AnonymousExecuteClosure)
+        (input class = AnonymousExecuteFunction)
             ifTrue: [
                 value := (self reverse: (input value)).
                 result add: (input set: value).
@@ -613,31 +613,31 @@ ReverseParameter extend [
 ]
 
 
-Object subclass: #RemoveClosureSplit.
-RemoveClosureSplit instanceVariableNames: 'result'.
-RemoveClosureSplit extend [
+Object subclass: #RemoveFunctionSplit.
+RemoveFunctionSplit instanceVariableNames: 'result'.
+RemoveFunctionSplit extend [
     run: input [
         result := OrderedCollection new.
-        input collect: [:current | self isAssignClosure: current].
+        input collect: [:current | self isAssignFunction: current].
         ^result
     ]
     remove: input [
-        ^(input reject: [:current | (current class) = NodeClosureSplit])
+        ^(input reject: [:current | (current class) = NodeFunctionSplit])
     ]
-    isAssignClosure: input [
+    isAssignFunction: input [
         |value|
-        (input class = NodeClosure)
+        (input class = NodeFunction)
             ifTrue: [
                 value := (self remove: (input body)).
                 result add: (input setBody: value).
             ]
             ifFalse: [
-                self isAnonymousExecuteClosure: input
+                self isAnonymousExecuteFunction: input
             ]
     ]
-    isAnonymousExecuteClosure: input [
+    isAnonymousExecuteFunction: input [
         |value|
-        (input class = AnonymousExecuteClosure)
+        (input class = AnonymousExecuteFunction)
             ifTrue: [
                 value := (self remove: (input value)).
                 result add: (input set: value).
@@ -654,8 +654,8 @@ RemoveClosureSplit extend [
 
 Object subclass: #Parser.
 Parser instanceVariableNames: 'step1 step2 step3 step4 replaceVariable infixToPostfixStep
-mergeMessage processClosurePriority reverseParameter
-processClosure removeClosureSplit virtualMachine'.
+mergeMessage processFunctionPriority reverseParameter
+processFunction removeFunctionSplit virtualMachine'.
 Parser class extend [
     new [
         ^(super new init)
@@ -668,12 +668,12 @@ Parser extend [
         step3 := ProcessAssignmentPriority new.
         step4 := ProcessAtom new.
         mergeMessage := MergeMessage new.
-        processClosure := ProcessClosure new.
+        processFunction := ProcessFunction new.
         replaceVariable := ReplaceVariable new init.
-        processClosurePriority := ProcessClosurePriority new.
+        processFunctionPriority := ProcessFunctionPriority new.
         infixToPostfixStep := InfixToPostfix new.
         reverseParameter := ReverseParameter new.
-        removeClosureSplit := RemoveClosureSplit new.
+        removeFunctionSplit := RemoveFunctionSplit new.
         virtualMachine := LittleStackMachine new init.
         ^self
     ]
@@ -684,12 +684,12 @@ Parser extend [
         result := step3 run: result.
         result := step4 run: result.
         result := mergeMessage run: result.
-        result := processClosure run: result.
+        result := processFunction run: result.
         result := replaceVariable run: result.
-        result := processClosurePriority run: result.
+        result := processFunctionPriority run: result.
         result := infixToPostfixStep reset; run: result.
         result := reverseParameter run: result.
-        result := removeClosureSplit run: result.
+        result := removeFunctionSplit run: result.
         result := virtualMachine run: result.
         ^result
     ]

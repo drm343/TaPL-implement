@@ -97,21 +97,21 @@ AssignVariable extend [
 ]
 
 
-BaseNode subclass: #ClosureBody.
-ClosureBody extend [
+BaseNode subclass: #FunctionBody.
+FunctionBody extend [
     init [
         priority := 1.
-        type := 'closure-body'.
+        type := 'funtion-body'.
         ^self
     ]
 ]
 
 
-BaseNode subclass: #AnonymousExecuteClosure.
-AnonymousExecuteClosure extend [
+BaseNode subclass: #AnonymousExecuteFunction.
+AnonymousExecuteFunction extend [
     init [
         priority := 1.
-        type := 'anonymous-execute-closure'.
+        type := 'anonymous-execute-funtion'.
         ^self
     ]
     asString [
@@ -125,29 +125,29 @@ AnonymousExecuteClosure extend [
 ]
 
 
-BaseNode subclass: #ExecuteClosure.
-ExecuteClosure extend [
+BaseNode subclass: #ExecuteFunction.
+ExecuteFunction extend [
     init [
         priority := 1.
-        type := 'execute-closure'.
+        type := 'execute-funtion'.
         ^self
     ]
 ]
 
 
-BaseNode subclass: #NodeClosure.
-NodeClosure instanceVariableNames: 'body'.
-NodeClosure class extend [
+BaseNode subclass: #NodeFunction.
+NodeFunction instanceVariableNames: 'body'.
+NodeFunction class extend [
     upgradeFrom: aNode and: anOtherNode [
         |yourself|
         yourself := super upgradeFrom: aNode.
         ^(yourself setBody: anOtherNode)
     ]
 ]
-NodeClosure extend [
+NodeFunction extend [
     init [
         super init.
-        type := 'closure'.
+        type := 'funtion'.
         ^self
     ]
     setBody: aNode [
@@ -258,12 +258,12 @@ NodeMergedMessage extend [
 ]
 
 
-BaseNode subclass: #NodeClosureSplit.
-NodeClosureSplit extend [
+BaseNode subclass: #NodeFunctionSplit.
+NodeFunctionSplit extend [
     init [
         super init.
         priority := 0.
-        type := 'closure-split'.
+        type := 'funtion-split'.
         ^self
     ]
 ]

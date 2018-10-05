@@ -38,10 +38,10 @@ LittleStackMachine extend [
                     ].
                 data at: (variable value) put: (stack last copy).
             ]
-            ifFalse: [ self processAssignClosure: variable ]
+            ifFalse: [ self processAssignFunction: variable ]
     ]
-    processAssignClosure: closure [
-        ((closure class) = NodeClosure)
+    processAssignFunction: closure [
+        ((closure class) = NodeFunction)
             ifTrue: [
                 (closure value) > (code size)
                     ifTrue: [
@@ -50,19 +50,19 @@ LittleStackMachine extend [
                 code at: (closure value) put: (closure body copy).
                 stack add: (NodeNumber set: (closure value))
             ]
-            ifFalse: [ self processExecuteClosure: closure]
+            ifFalse: [ self processExecuteFunction: closure]
     ]
-    processExecuteClosure: closure [
+    processExecuteFunction: closure [
         |executeCode|
-        (closure class = ExecuteClosure)
+        (closure class = ExecuteFunction)
             ifTrue: [
                 executeCode := (code at: (closure value)) copy.
                 executeCode collect: [:current | self processNumber: current].
             ]
-            ifFalse: [self processAnonymousExecuteClosure: closure]
+            ifFalse: [self processAnonymousExecuteFunction: closure]
     ]
-    processAnonymousExecuteClosure: closure [
-        (closure class = AnonymousExecuteClosure)
+    processAnonymousExecuteFunction: closure [
+        (closure class = AnonymousExecuteFunction)
             ifTrue: [
                 (closure value) collect: [:current | self processNumber: current].
             ]
