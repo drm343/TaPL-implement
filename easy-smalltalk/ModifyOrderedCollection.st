@@ -1,5 +1,3 @@
-OrderedCollection class extend [
-]
 OrderedCollection extend [
     printNl [
         |result|

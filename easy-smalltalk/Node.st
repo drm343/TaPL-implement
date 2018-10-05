@@ -1,5 +1,5 @@
 Object subclass: #BaseNode.
-BaseNode instanceVariableNames: 'value type priority'.
+BaseNode instanceVariableNames: 'info value type priority'.
 BaseNode class extend [
     set: input [
         |yourself|
@@ -15,6 +15,7 @@ BaseNode class extend [
 ]
 BaseNode extend [
     init [
+        info := nil.
         type := nil.
         priority := 0.
         ^self
@@ -22,6 +23,13 @@ BaseNode extend [
     set: input [
         value := input.
         ^self
+    ]
+    setInfo: input [
+        info := input.
+        ^self
+    ]
+    info [
+        ^info
     ]
     setByNode: node [
         value := node value.
@@ -108,18 +116,28 @@ FunctionBody extend [
 
 
 BaseNode subclass: #AnonymousExecuteFunction.
+AnonymousExecuteFunction instanceVariableNames: 'processed'.
 AnonymousExecuteFunction extend [
     init [
+        processed := false.
         priority := 1.
         type := 'anonymous-execute-funtion'.
+        ^self
+    ]
+    setProcessed [
+        processed := true.
         ^self
     ]
     asString [
         |result|
         result := ''.
-        value collect: [ :current |
-            result := ('%1 %2' % {result . current asString})
-        ].
+        processed
+            ifTrue: [result := value]
+            ifFalse: [
+                value collect: [ :current |
+                    result := ('%1 %2' % {result . current asString})
+                ].
+            ].
         ^('(%1 (%2) %3) ' % {type . result . priority})
     ]
 ]
@@ -170,6 +188,16 @@ NodeVariable extend [
         super init.
         priority := 0.
         type := 'variable'.
+        ^self
+    ]
+]
+
+
+NodeVariable subclass: #NodeProperty.
+NodeProperty extend [
+    init [
+        priority := 0.
+        type := 'property'.
         ^self
     ]
 ]

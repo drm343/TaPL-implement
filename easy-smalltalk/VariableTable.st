@@ -16,8 +16,8 @@ BaseKeyValue extend [
     ]
     value [^value]
     isVariable [^isVariable]
-    printNl [
-        ('%1 %2' % {key . value}) printNl
+    asString [
+        ^('%1 %2' % {key . value})
     ]
 ]
 

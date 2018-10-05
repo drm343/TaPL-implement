@@ -1,5 +1,6 @@
 FileStream fileIn: 'Node.st'.
 FileStream fileIn: 'VariableTable.st'.
+FileStream fileIn: 'ClassInfo.st'.
 FileStream fileIn: 'LittleStackMachine.st'.
 
 
@@ -289,6 +290,66 @@ ProcessFunction extend [
 ]
 
 
+Object subclass: #ReplaceClassInfo.
+ReplaceClassInfo instanceVariableNames: 'table aClassInfo'.
+ReplaceClassInfo extend [
+    init [
+        table := OrderedCollection new.
+        ^self
+    ]
+    run: input [
+        ^(input collect: [:current | self isAssignFunction: current])
+    ]
+    isAssignFunction: node [
+        |key value code|
+        (node class = NodeFunction)
+            ifTrue: [
+                value := node value.
+                aClassInfo := ClassInfo init: value.
+                table add: aClassInfo.
+                code := self run: (node body).
+                ^(node setInfo: aClassInfo; setBody: code)
+            ]
+            ifFalse: [^(self isAnonymousExecuteFunction: node)]
+    ]
+    isAnonymousExecuteFunction: node [
+        |key value|
+        (node class = AnonymousExecuteFunction)
+            ifTrue: [
+                value := node value.
+                aClassInfo := ClassInfo init: 'Anonymous-Function'.
+                table add: aClassInfo.
+                value := self run: value.
+                ^(node setInfo: aClassInfo; set: value)
+            ]
+            ifFalse: [^(self isParameter: node)]
+    ]
+    isParameter: node [
+        |value|
+        (node class = NodeParameter)
+            ifTrue: [
+                value := aClassInfo addVariable: (node value).
+                ^(node set: value)
+            ]
+            ifFalse: [^(self isNodeVariable: node)]
+    ]
+    isNodeVariable: node [
+        |result|
+        (node class = NodeVariable)
+            ifTrue: [
+                result := aClassInfo findVariable: (node value).
+                (result = nil)
+                    ifTrue: [^node].
+                node set: (result value).
+                (result isVariable)
+                    ifTrue: [^(NodeProperty upgradeFrom: node)]
+                    ifFalse: [^(ExecuteFunction upgradeFrom: node)]
+            ]
+            ifFalse: [^node]
+    ]
+]
+
+
 Object subclass: #ReplaceVariable.
 ReplaceVariable instanceVariableNames: 'table'.
 ReplaceVariable extend [
@@ -299,43 +360,34 @@ ReplaceVariable extend [
     run: input [
         ^(input collect: [:current | self isAssignVariable: current])
     ]
-    isAssignVariable: input [
+    isAssignVariable: node [
         |value|
-        ((input class) = AssignVariable)
+        ((node class) = AssignVariable)
             ifTrue: [
-                value := table add: (input value).
-                ^(input set: value)
+                value := table add: (node value).
+                ^(node set: value)
             ]
-            ifFalse: [^(self isAssignFunction: input)]
+            ifFalse: [^(self isAssignFunction: node)]
     ]
-    isAssignFunction: input [
-        |value|
-        (input class = NodeFunction)
+    isAssignFunction: node [
+        |key value|
+        (node class = NodeFunction)
             ifTrue: [
-                value := table addFuntion: (input value).
-                input set: value.
-                value := self run: (input body).
-                ^(input setBody: value)
+                key := table addFuntion: (node value).
+                node set: key.
+                value := self run: (node body).
+                ^(node setBody: value)
             ]
-            ifFalse: [^(self isAnonymousExecuteFunction: input)]
+            ifFalse: [^(self isAnonymousExecuteFunction: node)]
     ]
-    isAnonymousExecuteFunction: input [
+    isAnonymousExecuteFunction: node [
         |value|
-        ((input class) = AnonymousExecuteFunction)
+        (node class = AnonymousExecuteFunction)
             ifTrue: [
-                value := (self run: (input value)).
-                ^(input set: value)
+                value := (self run: (node value)).
+                ^(node set: value)
             ]
-            ifFalse: [^(self isParameter: input)]
-    ]
-    isParameter: input [
-        |value|
-        ((input class) = NodeParameter)
-            ifTrue: [
-                value := table add: (input value).
-                ^(input set: value)
-            ]
-            ifFalse: [^(self isNodeVariable: input)]
+            ifFalse: [^(self isNodeVariable: node)]
     ]
     isNodeVariable: input [
         |node|
@@ -350,28 +402,6 @@ ReplaceVariable extend [
             ifFalse: [^input]
     ]
 ]
-
-
-"Object subclass: #ReplaceFunction.
-ReplaceFunction instanceVariableNames: 'table'.
-ReplaceFunction extend [
-    init [
-        table := FunctionTable init.
-        ^self
-    ]
-    run: input [
-        ^(input collect: [:current | self isFunction: current])
-    ]
-    isFunction: input [
-        |value|
-        ((input class) = NodeFunction)
-            ifTrue: [
-                value := table add: (input value).
-                ^(input set: value)
-            ]
-            ifFalse: [^input]
-    ]
-]"
 
 
 Object subclass: #ProcessFunctionPriority.
@@ -474,7 +504,7 @@ InfixToPostfix extend [
             ]
     ]
     isNumber: value [
-        (value class) = NodeNumber
+        (value class = NodeNumber)
             ifTrue: [
                 result add: value
             ]
@@ -483,7 +513,7 @@ InfixToPostfix extend [
             ]
     ]
     isVariable: value [
-        (value class) = NodeVariable
+        (value class = NodeVariable)
             ifTrue: [
                 result add: value
             ]
@@ -492,7 +522,16 @@ InfixToPostfix extend [
             ]
     ]
     isParamter: value [
-        (value class) = NodeParameter
+        (value class = NodeParameter)
+            ifTrue: [
+                result add: value
+            ]
+            ifFalse: [
+                self isProperty: value
+            ]
+    ]
+    isProperty: value [
+        (value class = NodeProperty)
             ifTrue: [
                 result add: value
             ]
@@ -519,7 +558,7 @@ InfixToPostfix extend [
             ]
     ]
     isExpression: value [
-        (value class) = NodeExpression
+        (value class = NodeExpression)
             ifTrue: [
                 result addAll: stack.
                 stack := OrderedCollection new.
@@ -652,10 +691,53 @@ RemoveFunctionSplit extend [
 ]
 
 
+Object subclass: #CreateAnonymousInstance.
+CreateAnonymousInstance instanceVariableNames: 'virtualMachine'.
+CreateAnonymousInstance extend [
+    init: aVM [
+        virtualMachine := aVM.
+        ^self
+    ]
+    run: node [
+        ^(node collect: [:current | self isAnonymousExecuteFunction: current])
+    ]
+    isAnonymousExecuteFunction: node [
+        |key value info code|
+        (node class = AnonymousExecuteFunction)
+            ifTrue: [
+                info := node info.
+                code := node value.
+                key := ((1 to: (info propertySize)) collect: [:current | 'value:']) join: ''.
+                info addMethod: key.
+                value := virtualMachine createFunctionInstance: info with: code.
+                ^(node setProcessed; set: value)
+            ]
+            ifFalse: [
+                ^(self isOthers: node)
+            ]
+    ]
+    isOthers: node [
+        ^node
+    ]
+]
+
+
 Object subclass: #Parser.
-Parser instanceVariableNames: 'step1 step2 step3 step4 replaceVariable infixToPostfixStep
-mergeMessage processFunctionPriority reverseParameter
-processFunction removeFunctionSplit virtualMachine'.
+Parser instanceVariableNames: '
+createAnonymousInstance
+infixToPostfixStep
+mergeMessage
+processFunction
+processFunctionPriority
+removeFunctionSplit
+replaceClassInfo
+replaceVariable
+reverseParameter
+step1
+step2
+step3
+step4
+virtualMachine'.
 Parser class extend [
     new [
         ^(super new init)
@@ -670,11 +752,13 @@ Parser extend [
         mergeMessage := MergeMessage new.
         processFunction := ProcessFunction new.
         replaceVariable := ReplaceVariable new init.
+        replaceClassInfo := ReplaceClassInfo new init.
         processFunctionPriority := ProcessFunctionPriority new.
         infixToPostfixStep := InfixToPostfix new.
         reverseParameter := ReverseParameter new.
         removeFunctionSplit := RemoveFunctionSplit new.
         virtualMachine := LittleStackMachine new init.
+        createAnonymousInstance := CreateAnonymousInstance new init: virtualMachine.
         ^self
     ]
     run: input [
@@ -685,11 +769,13 @@ Parser extend [
         result := step4 run: result.
         result := mergeMessage run: result.
         result := processFunction run: result.
+        result := replaceClassInfo run: result.
         result := replaceVariable run: result.
         result := processFunctionPriority run: result.
         result := infixToPostfixStep reset; run: result.
         result := reverseParameter run: result.
         result := removeFunctionSplit run: result.
+        result := createAnonymousInstance run: result.
         result := virtualMachine run: result.
         ^result
     ]
