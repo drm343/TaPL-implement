@@ -25,8 +25,10 @@ LittleStackMachine extend [
         instances add: result.
         ^(instances size)
     ]
-    run: input [
+    resetStack [
         stack := OrderedCollection new.
+    ]
+    run: input [
         input collect: [:current | self processNumber: current].
         ^stack
     ]
@@ -113,7 +115,7 @@ LittleStackMachine extend [
     processMessage: message [
         (message class = NodeMessage)
             ifTrue: [
-                stack addAll: (message body).
+                self run: (message body).
                 stack add: (message value).
             ]
             ifFalse: [ self processProperty: message]

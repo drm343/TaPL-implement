@@ -222,11 +222,21 @@ ProcessAtom extend [
 
 
 Object subclass: #MergeMessage.
-MergeMessage instanceVariableNames: 'stack result previous'.
+MergeMessage instanceVariableNames: 'tmp stack result previous'.
 MergeMessage extend [
     run: input [
         result := OrderedCollection new.
         previous := nil.
+        stack := input collect: [:current |
+            (current class = AnonymousExecuteFunction)
+                ifTrue: [
+                    tmp := MergeMessage new.
+                    tmp := tmp run: (current body).
+                    current setBody: tmp.
+                    current
+                ]
+                ifFalse: [current]
+        ].
         stack := input collectWithNext: [:current :next |
             (current class = NodeAtomMessage)
                 ifTrue: [previous := (NodeMergedMessage upgradeFrom: current and: next). previous copy]
@@ -262,6 +272,11 @@ MergeMessage extend [
                 ].
             current
         ].
+        (previous = nil)
+            ifFalse: [
+                result add: previous.
+                previous := nil.
+            ].
         ^result
     ]
 ]
@@ -379,6 +394,15 @@ ReplaceClassInfo extend [
                     ifTrue: [^(NodeProperty upgradeFrom: node)]
                     ifFalse: [^(ExecuteFunction upgradeFrom: node)]
             ]
+            ifFalse: [^(self isMessage: node)]
+    ]
+    isMessage: node [
+        |result|
+        (node class = NodeMessage)
+            ifTrue: [
+                result := self run: (node body).
+                ^(node setBody: result)
+            ]
             ifFalse: [^node]
     ]
 ]
@@ -397,7 +421,17 @@ ReplaceMessage extend [
         ^self
     ]
     run: input [
-        ^(input collect: [:current | self isMessage: current])
+        ^(input collect: [:current | self isAnonymousExecuteFunction: current])
+    ]
+    isAnonymousExecuteFunction: node [
+        |code|
+        (node class = AnonymousExecuteFunction)
+            ifTrue: [
+                code := node body.
+                code := self run: code.
+                ^(node setBody: code)
+            ]
+            ifFalse: [^(self isMessage: node)]
     ]
     isMessage: node [
         |key value code|
@@ -601,13 +635,13 @@ InfixToPostfix extend [
                 self isProperty: value
             ]
     ]
-    isProperty: value [
-        (value class = NodeProperty)
+    isProperty: node [
+        (node class = NodeProperty)
             ifTrue: [
-                result add: value
+                result add: node
             ]
             ifFalse: [
-                self isFunctionSplit: value
+                self isFunctionSplit: node
             ]
     ]
     isFunctionSplit: value [
@@ -619,14 +653,27 @@ InfixToPostfix extend [
                 self isMessage: value
             ]
     ]
-    isMessage: value [
-        (value class = NodeMessage)
+    isMessage: node [
+        |yourself code|
+        (node class = NodeMessage)
             ifTrue: [
-                result add: value
+                code := (node body) collect: [:current | self isAnonymousFunctionInMessage: current].
+                node setBody: code.
+                self isStackNull: node
             ]
             ifFalse: [
-                self isExpression: value
+                self isExpression: node
             ]
+    ]
+    isAnonymousFunctionInMessage: node [
+        |yourself code|
+        (node class = AnonymousExecuteFunction)
+            ifTrue: [
+                yourself := InfixToPostfix new reset.
+                code := yourself run: (node body).
+                node setBody: code.
+            ].
+        ^node
     ]
     isExpression: value [
         (value class = NodeExpression)
@@ -753,6 +800,18 @@ RemoveFunctionSplit extend [
                 result add: (node setBody: code).
             ]
             ifFalse: [
+                self isMessage: node
+            ]
+    ]
+    isMessage: node [
+        |yourself code|
+        (node class = NodeMessage)
+            ifTrue: [
+                yourself := RemoveFunctionSplit new.
+                code := yourself run: (node body).
+                result add: (node setBody: code).
+            ]
+            ifFalse: [
                 self isOthers: node
             ]
     ]
@@ -767,6 +826,7 @@ Parser instanceVariableNames: '
 infixToPostfixStep
 mergeMessage
 messageTable
+processAssignmentPriority
 processFunction
 processFunctionPriority
 removeFunctionSplit
@@ -789,11 +849,11 @@ Parser extend [
         messageTable := MessageTable create.
         step1 := Tokenize new.
         step2 := ProcessParentheses new.
-        step3 := ProcessAssignmentPriority new.
+        processAssignmentPriority := ProcessAssignmentPriority new.
         step4 := ProcessAtom new.
         mergeMessage := MergeMessage new.
-        replaceMessage := ReplaceMessage createWithMessageTable: messageTable.
         processFunction := ProcessFunction new.
+        replaceMessage := ReplaceMessage createWithMessageTable: messageTable.
         replaceVariable := ReplaceVariable new init.
         replaceClassInfo := ReplaceClassInfo createWithMessageTable: messageTable.
         processFunctionPriority := ProcessFunctionPriority new.
@@ -807,10 +867,10 @@ Parser extend [
         |result|
         result := step1 reset; run: input.
         result := step2 run: result.
-        result := step3 run: result.
+        result := processAssignmentPriority run: result.
         result := step4 run: result.
-        result := mergeMessage run: result.
         result := processFunction run: result.
+        result := mergeMessage run: result.
         result := replaceMessage run: result.
         result := replaceClassInfo run: result.
         result := replaceVariable run: result.
@@ -818,7 +878,7 @@ Parser extend [
         result := infixToPostfixStep reset; run: result.
         result := reverseParameter run: result.
         result := removeFunctionSplit run: result.
-        result := virtualMachine run: result.
+        result := virtualMachine resetStack; run: result.
         ^result
     ]
     runAndPrint: input [

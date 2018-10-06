@@ -270,7 +270,7 @@ BaseNode subclass: #NodeAtomMessage.
 NodeAtomMessage extend [
     init [
         super init.
-        priority := 0.
+        priority := 2.
         type := 'atom-message'.
         ^self
     ]
@@ -323,7 +323,12 @@ NodeMessage extend [
         ^self
     ]
     asString [
-        ^('(%1 %2 %3 (%4)) ' % {type . value . priority . body})
+        |result|
+        result := ''.
+        body collect: [ :current |
+             result := ('%1 %2' % {result . current asString})
+        ].
+        ^('(%1 %2 %3 (%4)) ' % {type . value . priority . result})
     ]
 ]
 
