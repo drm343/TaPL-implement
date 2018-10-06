@@ -17,7 +17,7 @@ LittleStackMachine extend [
         |result aTypeName aSize|
         aTypeName := node type.
         aSize := node propertySize.
-        result := (Instance create: aTypeName withPropertySize: aSize andCode: code).
+        result := Instance create: aTypeName withPropertySize: aSize andCode: code.
         instances add: result.
         ^(instances size)
     ]
@@ -80,13 +80,22 @@ LittleStackMachine extend [
             ]
             ifFalse: [self processAnonymousExecuteFunction: function]
     ]
-    processAnonymousExecuteFunction: function [
-        (function class = AnonymousExecuteFunction)
+    processAnonymousExecuteFunction: node [
+        |info key value executeCode|
+        (node class = AnonymousExecuteFunction)
             ifTrue: [
-                currentInstance := instances at: (function value).
+                info := node info.
+                executeCode := node body.
+                key := ((1 to: (info propertySize)) collect: [:current | 'value:']) join: ''.
+                info addMethod: key.
+                value := self createFunctionInstance: info with: executeCode.
+                node setProcessed; set: value.
+                currentInstance := instances at: value.
                 (currentInstance code) collect: [:current | self processNumber: current].
+                instances remove: currentInstance.
+                currentInstance := nil.
             ]
-            ifFalse: [self processParameter: function]
+            ifFalse: [self processParameter: node]
     ]
     processParameter: parameter [
         (parameter class = NodeParameter)

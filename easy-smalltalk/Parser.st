@@ -313,14 +313,14 @@ ReplaceClassInfo extend [
             ifFalse: [^(self isAnonymousExecuteFunction: node)]
     ]
     isAnonymousExecuteFunction: node [
-        |key value|
+        |key value code|
         (node class = AnonymousExecuteFunction)
             ifTrue: [
                 value := node value.
                 aClassInfo := ClassInfo init: 'Anonymous-Function'.
                 table add: aClassInfo.
-                value := self run: value.
-                ^(node setInfo: aClassInfo; set: value)
+                code := self run: (node body).
+                ^(node setInfo: aClassInfo; setBody: code)
             ]
             ifFalse: [^(self isParameter: node)]
     ]
@@ -381,11 +381,11 @@ ReplaceVariable extend [
             ifFalse: [^(self isAnonymousExecuteFunction: node)]
     ]
     isAnonymousExecuteFunction: node [
-        |value|
+        |code|
         (node class = AnonymousExecuteFunction)
             ifTrue: [
-                value := (self run: (node value)).
-                ^(node set: value)
+                code := self run: (node body).
+                ^(node setBody: code)
             ]
             ifFalse: [^(self isNodeVariable: node)]
     ]
@@ -492,12 +492,12 @@ InfixToPostfix extend [
             ]
     ]
     isAnonymousExecuteFunction: funtion [
-        |yourself value|
-        ((funtion class) = AnonymousExecuteFunction)
+        |yourself code|
+        (funtion class = AnonymousExecuteFunction)
             ifTrue: [
                 yourself := InfixToPostfix new reset.
-                value := (yourself run: (funtion value)).
-                self isStackNull: (funtion set: value)
+                code := yourself run: (funtion body).
+                self isStackNull: (funtion setBody: code)
             ]
             ifFalse: [
                 self isNumber: funtion
@@ -628,22 +628,22 @@ ReverseParameter extend [
         |value|
         (input class = NodeFunction)
             ifTrue: [
-                value := (self reverse: (input body)).
+                value := self reverse: (input body).
                 result add: (input setBody: value).
             ]
             ifFalse: [
                 self isAnonymousExecuteFunction: input
             ]
     ]
-    isAnonymousExecuteFunction: input [
-        |value|
-        (input class = AnonymousExecuteFunction)
+    isAnonymousExecuteFunction: node [
+        |code|
+        (node class = AnonymousExecuteFunction)
             ifTrue: [
-                value := (self reverse: (input value)).
-                result add: (input set: value).
+                code := self reverse: (node body).
+                result add: (node setBody: code).
             ]
             ifFalse: [
-                self isOthers: input
+                self isOthers: node
             ]
     ]
     isOthers: input [
@@ -663,68 +663,36 @@ RemoveFunctionSplit extend [
     remove: input [
         ^(input reject: [:current | (current class) = NodeFunctionSplit])
     ]
-    isAssignFunction: input [
-        |value|
-        (input class = NodeFunction)
+    isAssignFunction: node [
+        |code|
+        (node class = NodeFunction)
             ifTrue: [
-                value := (self remove: (input body)).
-                result add: (input setBody: value).
+                code := self remove: (node body).
+                result add: (node setBody: code).
             ]
             ifFalse: [
-                self isAnonymousExecuteFunction: input
+                self isAnonymousExecuteFunction: node
             ]
-    ]
-    isAnonymousExecuteFunction: input [
-        |value|
-        (input class = AnonymousExecuteFunction)
-            ifTrue: [
-                value := (self remove: (input value)).
-                result add: (input set: value).
-            ]
-            ifFalse: [
-                self isOthers: input
-            ]
-    ]
-    isOthers: input [
-        result add: input
-    ]
-]
-
-
-Object subclass: #CreateAnonymousInstance.
-CreateAnonymousInstance instanceVariableNames: 'virtualMachine'.
-CreateAnonymousInstance extend [
-    init: aVM [
-        virtualMachine := aVM.
-        ^self
-    ]
-    run: node [
-        ^(node collect: [:current | self isAnonymousExecuteFunction: current])
     ]
     isAnonymousExecuteFunction: node [
-        |key value info code|
+        |code|
         (node class = AnonymousExecuteFunction)
             ifTrue: [
-                info := node info.
-                code := node value.
-                key := ((1 to: (info propertySize)) collect: [:current | 'value:']) join: ''.
-                info addMethod: key.
-                value := virtualMachine createFunctionInstance: info with: code.
-                ^(node setProcessed; set: value)
+                code := self remove: (node body).
+                result add: (node setBody: code).
             ]
             ifFalse: [
-                ^(self isOthers: node)
+                self isOthers: node
             ]
     ]
     isOthers: node [
-        ^node
+        result add: node
     ]
 ]
 
 
 Object subclass: #Parser.
 Parser instanceVariableNames: '
-createAnonymousInstance
 infixToPostfixStep
 mergeMessage
 processFunction
@@ -758,7 +726,6 @@ Parser extend [
         reverseParameter := ReverseParameter new.
         removeFunctionSplit := RemoveFunctionSplit new.
         virtualMachine := LittleStackMachine new init.
-        createAnonymousInstance := CreateAnonymousInstance new init: virtualMachine.
         ^self
     ]
     run: input [
@@ -775,7 +742,6 @@ Parser extend [
         result := infixToPostfixStep reset; run: result.
         result := reverseParameter run: result.
         result := removeFunctionSplit run: result.
-        result := createAnonymousInstance run: result.
         result := virtualMachine run: result.
         ^result
     ]

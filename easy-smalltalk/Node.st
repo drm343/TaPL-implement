@@ -116,13 +116,32 @@ FunctionBody extend [
 
 
 BaseNode subclass: #AnonymousExecuteFunction.
-AnonymousExecuteFunction instanceVariableNames: 'processed'.
+AnonymousExecuteFunction instanceVariableNames: 'body processed'.
+AnonymousExecuteFunction class extend [
+    upgradeFrom: aNode [
+        |yourself|
+        yourself := super upgradeFrom: aNode.
+        ^(yourself set: 0; setBody: (aNode value))
+    ]
+]
 AnonymousExecuteFunction extend [
     init [
         processed := false.
         priority := 1.
+        value := 0.
         type := 'anonymous-execute-funtion'.
         ^self
+    ]
+    setByNode: node [
+        priority := (node priority).
+        ^self
+    ]
+    setBody: aNode [
+        body := aNode.
+        ^self
+    ]
+    body [
+        ^body
     ]
     setProcessed [
         processed := true.
@@ -132,13 +151,13 @@ AnonymousExecuteFunction extend [
         |result|
         result := ''.
         processed
-            ifTrue: [result := value]
+            ifTrue: [result := body]
             ifFalse: [
-                value collect: [ :current |
+                body collect: [ :current |
                     result := ('%1 %2' % {result . current asString})
                 ].
             ].
-        ^('(%1 (%2) %3) ' % {type . result . priority})
+        ^('(%1 (%2) %3 (%4)) ' % {type . value . priority . result})
     ]
 ]
 
@@ -264,8 +283,7 @@ NodeMergedMessage class extend [
     upgradeFrom: aNode and: anOtherNode [
         |yourself|
         yourself := super upgradeFrom: aNode.
-        yourself setBody: anOtherNode.
-        ^yourself
+        ^(yourself setBody: anOtherNode)
     ]
 ]
 NodeMergedMessage extend [
