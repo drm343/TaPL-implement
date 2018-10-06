@@ -1,6 +1,7 @@
 FileStream fileIn: 'Node.st'.
 FileStream fileIn: 'VariableTable.st'.
 FileStream fileIn: 'ClassInfo.st'.
+FileStream fileIn: 'MessageTable.st'.
 FileStream fileIn: 'LittleStackMachine.st'.
 
 
@@ -45,7 +46,7 @@ Tokenize extend [
     parseMessage: input [
         (input =~ message)
             ifMatched: [:match |
-                result add: (NodeMessage set: (match at: 1)).
+                result add: (NodeAtomMessage set: (match at: 1)).
                 self run: (match at: 2)
             ]
             ifNotMatched: [self parseAtom: input]
@@ -221,20 +222,47 @@ ProcessAtom extend [
 
 
 Object subclass: #MergeMessage.
-MergeMessage instanceVariableNames: 'result stack turn previous'.
+MergeMessage instanceVariableNames: 'stack result previous'.
 MergeMessage extend [
     run: input [
+        result := OrderedCollection new.
         previous := nil.
-        result := input collectWithNext: [:current :next |
-            (current class = NodeMessage)
-                ifTrue: [previous := (NodeMergedMessage upgradeFrom: current and: next). previous]
+        stack := input collectWithNext: [:current :next |
+            (current class = NodeAtomMessage)
+                ifTrue: [previous := (NodeMergedMessage upgradeFrom: current and: next). previous copy]
                 ifFalse: [
                     (previous class = NodeMergedMessage)
                         ifTrue: [previous := current. nil]
-                        ifFalse: [previous := current. current]
+                        ifFalse: [previous := current. current copy]
                 ]
         ].
-        ^(result reject: [:current | current = nil])
+        stack := (stack reject: [:current | current = nil]) copy.
+        previous := nil.
+        stack collect: [:current |
+            (current class = NodeMergedMessage)
+                ifTrue: [
+                    (previous = nil)
+                        ifTrue: [
+                            previous := NodeMessage upgradeFrom: current.
+                        ]
+                        ifFalse: [
+                            previous upgradeWith: current.
+                        ].
+                ]
+                ifFalse: [
+                    (previous = nil)
+                        ifTrue: [
+                            result add: current.
+                        ]
+                        ifFalse: [
+                            result add: previous.
+                            result add: current.
+                            previous := nil.
+                        ].
+                ].
+            current
+        ].
+        ^result
     ]
 ]
 
@@ -291,9 +319,15 @@ ProcessFunction extend [
 
 
 Object subclass: #ReplaceClassInfo.
-ReplaceClassInfo instanceVariableNames: 'table aClassInfo'.
+ReplaceClassInfo instanceVariableNames: 'messageTable table aClassInfo'.
+ReplaceClassInfo class extend [
+    createWithMessageTable: aMessageTable [
+        ^(super new initWithTable: aMessageTable)
+    ]
+]
 ReplaceClassInfo extend [
-    init [
+    initWithTable: aTable [
+        messageTable := aTable.
         table := OrderedCollection new.
         ^self
     ]
@@ -350,11 +384,39 @@ ReplaceClassInfo extend [
 ]
 
 
+Object subclass: #ReplaceMessage.
+ReplaceMessage instanceVariableNames: 'messageTable'.
+ReplaceMessage class extend [
+    createWithMessageTable: aMessageTable [
+        ^(super new initWithTable: aMessageTable)
+    ]
+]
+ReplaceMessage extend [
+    initWithTable: aTable [
+        messageTable := aTable.
+        ^self
+    ]
+    run: input [
+        ^(input collect: [:current | self isMessage: current])
+    ]
+    isMessage: node [
+        |key value code|
+        (node class = NodeMessage)
+            ifTrue: [
+                key := node value.
+                value := messageTable findOrCreateBy: key.
+                ^(node set: value)
+            ]
+            ifFalse: [^node]
+    ]
+]
+
+
 Object subclass: #ReplaceVariable.
 ReplaceVariable instanceVariableNames: 'table'.
 ReplaceVariable extend [
     init [
-        table := VariableTable init.
+        table := VariableTable create.
         ^self
     ]
     run: input [
@@ -366,6 +428,15 @@ ReplaceVariable extend [
             ifTrue: [
                 value := table add: (node value).
                 ^(node set: value)
+            ]
+            ifFalse: [^(self isMessage: node)]
+    ]
+    isMessage: node [
+        |message|
+        (node class = NodeMessage)
+            ifTrue: [
+                message:= self run: (node body).
+                ^(node setBody: message)
             ]
             ifFalse: [^(self isAssignFunction: node)]
     ]
@@ -429,7 +500,7 @@ ProcessFunctionPriority extend [
             ifFalse: [^(self isMessage: node)]
     ]
     isMessage: node [
-        (node class = NodeMergedMessage)
+        (node class = NodeMessage)
             ifTrue: [
                 ^(node addPriority: modifyPriority)
             ]
@@ -549,7 +620,7 @@ InfixToPostfix extend [
             ]
     ]
     isMessage: value [
-        (value class = NodeMergedMessage)
+        (value class = NodeMessage)
             ifTrue: [
                 result add: value
             ]
@@ -695,10 +766,12 @@ Object subclass: #Parser.
 Parser instanceVariableNames: '
 infixToPostfixStep
 mergeMessage
+messageTable
 processFunction
 processFunctionPriority
 removeFunctionSplit
 replaceClassInfo
+replaceMessage
 replaceVariable
 reverseParameter
 step1
@@ -713,19 +786,21 @@ Parser class extend [
 ].
 Parser extend [
     init [
+        messageTable := MessageTable create.
         step1 := Tokenize new.
         step2 := ProcessParentheses new.
         step3 := ProcessAssignmentPriority new.
         step4 := ProcessAtom new.
         mergeMessage := MergeMessage new.
+        replaceMessage := ReplaceMessage createWithMessageTable: messageTable.
         processFunction := ProcessFunction new.
         replaceVariable := ReplaceVariable new init.
-        replaceClassInfo := ReplaceClassInfo new init.
+        replaceClassInfo := ReplaceClassInfo createWithMessageTable: messageTable.
         processFunctionPriority := ProcessFunctionPriority new.
         infixToPostfixStep := InfixToPostfix new.
         reverseParameter := ReverseParameter new.
         removeFunctionSplit := RemoveFunctionSplit new.
-        virtualMachine := LittleStackMachine new init.
+        virtualMachine := LittleStackMachine createWithMessageTable: messageTable.
         ^self
     ]
     run: input [
@@ -736,6 +811,7 @@ Parser extend [
         result := step4 run: result.
         result := mergeMessage run: result.
         result := processFunction run: result.
+        result := replaceMessage run: result.
         result := replaceClassInfo run: result.
         result := replaceVariable run: result.
         result := processFunctionPriority run: result.

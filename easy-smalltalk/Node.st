@@ -266,18 +266,18 @@ NodeParameter extend [
 ]
 
 
-BaseNode subclass: #NodeMessage.
-NodeMessage extend [
+BaseNode subclass: #NodeAtomMessage.
+NodeAtomMessage extend [
     init [
         super init.
         priority := 0.
-        type := 'message'.
+        type := 'atom-message'.
         ^self
     ]
 ]
 
 
-NodeMessage subclass: #NodeMergedMessage.
+NodeAtomMessage subclass: #NodeMergedMessage.
 NodeMergedMessage instanceVariableNames: 'body'.
 NodeMergedMessage class extend [
     upgradeFrom: aNode and: anOtherNode [
@@ -299,7 +299,31 @@ NodeMergedMessage extend [
         ^body
     ]
     asString [
-        ^('(%1 %2 %3 %4) ' % {type . value . priority . body asString})
+        ^('(%1 %2 %3 (%4)) ' % {type . value . priority . body})
+    ]
+]
+
+
+NodeMergedMessage subclass: #NodeMessage.
+NodeMessage extend [
+    init [
+        body := OrderedCollection new.
+        type := 'message'.
+        ^self
+    ]
+    setByNode: node [
+        value := node value.
+        priority := (node priority).
+        body add: (node body).
+        ^self
+    ]
+    upgradeWith: node [
+        value := value , (node value).
+        body add: (node body).
+        ^self
+    ]
+    asString [
+        ^('(%1 %2 %3 (%4)) ' % {type . value . priority . body})
     ]
 ]
 

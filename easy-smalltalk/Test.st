@@ -16,3 +16,4 @@ parser runAndPrint: '[:x | x + a] value: 10.'.
 parser runAndPrint: 'c.'.
 parser runAndPrint: 'b value: 20.'.
 parser runAndPrint: 'd value: 20 value: 30.'.
+parser runAndPrint: 'd value: a value: 30.'.

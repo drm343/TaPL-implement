@@ -2,9 +2,15 @@ FileStream fileIn: 'Instance.st'.
 
 
 Object subclass: #LittleStackMachine.
-LittleStackMachine instanceVariableNames: 'stack data code instances currentInstance'.
+LittleStackMachine instanceVariableNames: 'stack data code instances currentInstance messageTable'.
+LittleStackMachine class extend [
+    createWithMessageTable: aTable [
+        ^(super new initWithMessageTable: aTable)
+    ]
+]
 LittleStackMachine extend [
-    init [
+    initWithMessageTable: aTable [
+        messageTable := aTable.
         code := OrderedCollection new.
         data := OrderedCollection new.
         instances := OrderedCollection new.
@@ -15,9 +21,7 @@ LittleStackMachine extend [
     ]
     createFunctionInstance: node with: code [
         |result aTypeName aSize|
-        aTypeName := node type.
-        aSize := node propertySize.
-        result := Instance create: aTypeName withPropertySize: aSize andCode: code.
+        result := Instance createWithInfo: node andCode: code.
         instances add: result.
         ^(instances size)
     ]
@@ -63,7 +67,7 @@ LittleStackMachine extend [
                 info := node info.
                 executeCode := node body.
                 key := ((1 to: (info propertySize)) collect: [:current | 'value:']) join: ''.
-                info addMethod: key.
+                info addMethod: (messageTable findOrCreateBy: key).
                 value := self createFunctionInstance: info with: executeCode.
                 code at: (node value) put: value.
                 stack add: (NodeNumber set: (node value))
@@ -71,12 +75,13 @@ LittleStackMachine extend [
             ifFalse: [ self processExecuteFunction: node]
     ]
     processExecuteFunction: function [
-        |executeCode instanceValue|
+        |instanceValue key|
         (function class = ExecuteFunction)
             ifTrue: [
                 instanceValue := (code at: (function value)) copy.
                 currentInstance := instances at: instanceValue.
-                (currentInstance code) collect: [:current | self processNumber: current].
+                key := stack removeLast.
+                (currentInstance loadCode: key) collect: [:current | self processNumber: current].
             ]
             ifFalse: [self processAnonymousExecuteFunction: function]
     ]
@@ -87,11 +92,12 @@ LittleStackMachine extend [
                 info := node info.
                 executeCode := node body.
                 key := ((1 to: (info propertySize)) collect: [:current | 'value:']) join: ''.
-                info addMethod: key.
+                info addMethod: (messageTable findOrCreateBy: key).
                 value := self createFunctionInstance: info with: executeCode.
                 node setProcessed; set: value.
                 currentInstance := instances at: value.
-                (currentInstance code) collect: [:current | self processNumber: current].
+                key := stack removeLast.
+                (currentInstance loadCode: key) collect: [:current | self processNumber: current].
                 instances remove: currentInstance.
                 currentInstance := nil.
             ]
@@ -105,9 +111,10 @@ LittleStackMachine extend [
             ifFalse: [ self processMessage: parameter]
     ]
     processMessage: message [
-        (message class = NodeMergedMessage)
+        (message class = NodeMessage)
             ifTrue: [
-                stack add: (message body).
+                stack addAll: (message body).
+                stack add: (message value).
             ]
             ifFalse: [ self processProperty: message]
     ]

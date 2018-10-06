@@ -1,31 +1,10 @@
-Object subclass: #BaseKeyValue.
-BaseKeyValue instanceVariableNames: 'key value isVariable'.
-BaseKeyValue extend [
-    setKey: aKey withValue: aValue [
-        key := aKey.
-        value := aValue.
-        isVariable := true.
-        ^self
-    ]
-    setFunctionType [
-        isVariable := false.
-        ^self
-    ]
-    isKey: aKey [
-        ^(key = aKey)
-    ]
-    value [^value]
-    isVariable [^isVariable]
-    asString [
-        ^('%1 %2' % {key . value})
-    ]
-]
+FileStream fileIn: 'key-value/VariableKeyValue.st'.
 
 
 Object subclass: #VariableTable.
 VariableTable instanceVariableNames: 'stack'.
 VariableTable class extend [
-    init [
+    create [
         ^(super new init)
     ]
 ]
@@ -36,13 +15,13 @@ VariableTable extend [
     ]
     add: input [
         |node|
-        node := BaseKeyValue new setKey: input withValue: (stack size + 1).
+        node := VariableKeyValue new setKey: input withValue: (stack size + 1).
         stack add: node.
         ^(stack size)
     ]
     addFuntion: input [
         |node|
-        node := BaseKeyValue new setKey: input withValue: (stack size + 1).
+        node := VariableKeyValue new setKey: input withValue: (stack size + 1).
         node setFunctionType.
         stack add: node.
         ^(stack size)

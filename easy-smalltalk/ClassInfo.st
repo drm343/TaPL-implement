@@ -1,4 +1,4 @@
-FileStream fileIn: 'VariableTable.st'.
+FileStream fileIn: 'key-value/VariableKeyValue.st'.
 
 
 Object subclass: #ClassInfo.
@@ -22,13 +22,13 @@ ClassInfo extend [
     ]
     addVariable: input [
         |node|
-        node := BaseKeyValue new setKey: input withValue: (variableTable size + 1).
+        node := VariableKeyValue new setKey: input withValue: (variableTable size + 1).
         variableTable add: node.
         ^(variableTable size)
     ]
     addMethod: input [
         |node|
-        node := BaseKeyValue new setKey: input withValue: (methodTable size + 1).
+        node := VariableKeyValue new setKey: input withValue: (methodTable size + 1).
         node setFunctionType.
         methodTable add: node.
         ^(methodTable size)
@@ -43,7 +43,7 @@ ClassInfo extend [
     findMethod: input [
         |node|
         node := (methodTable select: [:current | current isKey: input]) last.
-        ^node
+        ^(node value)
     ]
     asString [
         ^('(classTable %1 %2 %3)' % {type . variableTable . methodTable})
