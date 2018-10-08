@@ -25,7 +25,7 @@ LittleStackMachine extend [
         instances add: result.
         ^(instances size)
     ]
-    resetStack [
+    reset [
         stack := OrderedCollection new.
     ]
     run: input [

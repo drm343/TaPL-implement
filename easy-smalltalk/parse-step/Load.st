@@ -1,0 +1,13 @@
+FileStream fileIn: 'parse-step/Tokenize.st'.
+FileStream fileIn: 'parse-step/ProcessParentheses.st'.
+FileStream fileIn: 'parse-step/ProcessAssignmentPriority.st'.
+FileStream fileIn: 'parse-step/ProcessAtom.st'.
+FileStream fileIn: 'parse-step/MergeMessage.st'.
+FileStream fileIn: 'parse-step/ProcessFunction.st'.
+FileStream fileIn: 'parse-step/ReplaceClassInfo.st'.
+FileStream fileIn: 'parse-step/ReplaceMessage.st'.
+FileStream fileIn: 'parse-step/ReplaceVariable.st'.
+FileStream fileIn: 'parse-step/ProcessFunctionPriority.st'.
+FileStream fileIn: 'parse-step/InfixToPostfix.st'.
+FileStream fileIn: 'parse-step/ReverseParameter.st'.
+FileStream fileIn: 'parse-step/RemoveFunctionSplit.st'.

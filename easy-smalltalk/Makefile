@@ -8,3 +8,6 @@ test:
 
 test_log:
 	$(VM) Test.st > $(LOG)
+
+snap:
+	$(VM) Snap.st
