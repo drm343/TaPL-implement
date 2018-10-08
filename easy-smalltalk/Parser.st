@@ -118,7 +118,7 @@ Tokenize extend [
 
 
 Object subclass: #ProcessParentheses.
-ProcessParentheses instanceVariableNames: 'modifyPriority'.
+ProcessParentheses instanceVariableNames: 'code modifyPriority'.
 ProcessParentheses extend [
     init [
         modifyPriority := 0.
@@ -126,24 +126,17 @@ ProcessParentheses extend [
     ]
     run: input [
         modifyPriority := 0.
-        input collect: [:next | self isOp: next].
+        input collect: [:next | self isParentheses: next].
         ^(input reject: [:next | (next class) = NodeParentheses])
     ]
-    isOp: node [
-        ((node class) = NodeOp)
-            ifTrue: [
-                ^(node addPriority: modifyPriority)
-            ]
-            ifFalse: [^(self isParentheses: node)]
-    ]
     isParentheses: node [
-        ((node class) = NodeParentheses)
+        (node class = NodeParentheses)
             ifTrue: [
                 self isLeft: node.
                 self isRight: node.
                 ^self
             ]
-            ifFalse: [^node]
+            ifFalse: [^(self isOthers: node)]
     ]
     isLeft: node [
         ((node value) = '(')
@@ -156,6 +149,9 @@ ProcessParentheses extend [
             ifTrue: [
                 modifyPriority := modifyPriority - (node priority)
             ]
+    ]
+    isOthers: node [
+        ^(node addPriority: modifyPriority)
     ]
 ]
 
@@ -448,6 +444,11 @@ ReplaceMessage extend [
 
 Object subclass: #ReplaceVariable.
 ReplaceVariable instanceVariableNames: 'table'.
+ReplaceVariable class extend [
+    new [
+        ^(super new init)
+    ]
+]
 ReplaceVariable extend [
     init [
         table := VariableTable create.
@@ -821,24 +822,51 @@ RemoveFunctionSplit extend [
 ]
 
 
+Object subclass: #Step.
+Step instanceVariableNames: 'step reset'.
+Step class extend [
+    create: aStep [
+        ^(super new init: aStep)
+    ]
+    createAndNeedReset: aStep [
+        |yourself|
+        yourself := super new init: aStep.
+        ^(yourself needReset)
+    ]
+]
+Step extend [
+    init: aStep [
+        step := aStep.
+        reset := false.
+        ^self
+    ]
+    needReset [
+        reset := true.
+        ^self
+    ]
+    run: input [
+        reset ifTrue: [step reset].
+        ^(step run: input)
+    ]
+]
+
+
+Object subclass: #DebugStep.
+DebugStep class extend [
+    create [
+        ^(super new)
+    ]
+]
+DebugStep extend [
+    run: input [
+        input printNl.
+        ^input
+    ]
+]
+
+
 Object subclass: #Parser.
-Parser instanceVariableNames: '
-infixToPostfixStep
-mergeMessage
-messageTable
-processAssignmentPriority
-processFunction
-processFunctionPriority
-removeFunctionSplit
-replaceClassInfo
-replaceMessage
-replaceVariable
-reverseParameter
-step1
-step2
-step3
-step4
-virtualMachine'.
+Parser instanceVariableNames: 'result messageTable stepOrder'.
 Parser class extend [
     new [
         ^(super new init)
@@ -847,38 +875,55 @@ Parser class extend [
 Parser extend [
     init [
         messageTable := MessageTable create.
-        step1 := Tokenize new.
-        step2 := ProcessParentheses new.
-        processAssignmentPriority := ProcessAssignmentPriority new.
-        step4 := ProcessAtom new.
-        mergeMessage := MergeMessage new.
-        processFunction := ProcessFunction new.
-        replaceMessage := ReplaceMessage createWithMessageTable: messageTable.
-        replaceVariable := ReplaceVariable new init.
-        replaceClassInfo := ReplaceClassInfo createWithMessageTable: messageTable.
-        processFunctionPriority := ProcessFunctionPriority new.
-        infixToPostfixStep := InfixToPostfix new.
-        reverseParameter := ReverseParameter new.
-        removeFunctionSplit := RemoveFunctionSplit new.
-        virtualMachine := LittleStackMachine createWithMessageTable: messageTable.
+
+        self startStep: Tokenize andNeedReset: true;
+            then: ProcessParentheses;
+            then: ProcessAssignmentPriority;
+            then: ProcessAtom;
+            then: ProcessFunction;
+            then: MergeMessage;
+            then: ReplaceMessage withMessageTable: messageTable;
+            then: ReplaceClassInfo withMessageTable: messageTable;
+            then: ReplaceVariable;
+            then: ProcessFunctionPriority;
+            then: InfixToPostfix andNeedReset: true;
+            then: ReverseParameter;
+            then: RemoveFunctionSplit;
+            debug;
+            then: LittleStackMachine withMessageTable: messageTable andNeedReset: true.
         ^self
     ]
+    debug [
+        stepOrder add: (DebugStep create).
+        ^self
+    ]
+    startStep: aStep andNeedReset: reset [
+        stepOrder := OrderedCollection new.
+        stepOrder add: (Step createAndNeedReset: (aStep new)).
+        ^self
+    ]
+    then: aStep [
+        stepOrder add: (Step create: (aStep new)).
+        ^self
+    ]
+    then: aStep withMessageTable: aMessageTable [
+        stepOrder add: (Step create: (aStep createWithMessageTable: aMessageTable)).
+        ^self
+    ]
+    then: aStep withMessageTable: aMessageTable andNeedReset: reset [
+        stepOrder add: (Step createAndNeedReset: (aStep createWithMessageTable: aMessageTable)).
+        ^self
+    ]
+    then: aStep andNeedReset: reset [
+        stepOrder add: (Step createAndNeedReset: (aStep new)).
+        ^self
+    ]
+    runStep: aStep [
+        result := aStep run: result.
+    ]
     run: input [
-        |result|
-        result := step1 reset; run: input.
-        result := step2 run: result.
-        result := processAssignmentPriority run: result.
-        result := step4 run: result.
-        result := processFunction run: result.
-        result := mergeMessage run: result.
-        result := replaceMessage run: result.
-        result := replaceClassInfo run: result.
-        result := replaceVariable run: result.
-        result := processFunctionPriority run: result.
-        result := infixToPostfixStep reset; run: result.
-        result := reverseParameter run: result.
-        result := removeFunctionSplit run: result.
-        result := virtualMachine resetStack; run: result.
+        result := input.
+        stepOrder collect: [:current | self runStep: current].
         ^result
     ]
     runAndPrint: input [
