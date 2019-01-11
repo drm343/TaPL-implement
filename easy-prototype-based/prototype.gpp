@@ -1,0 +1,296 @@
+#define AUTO_DEFINE typedef STRUCT_NAME * STRUCT
+#define DEFINE_START typedef STRUCT_NAME {
+#define DEFINE_END } * STRUCT
+#define CONCAT #1_#2
+#define STRUCT_NAME struct STRUCT
+#define VALUE_TYPE -1
+#define ADD_TYPE (#defeval VALUE_TYPE (1 + VALUE_TYPE)
+VALUE_TYPE)
+#defeval VALUE_NOTHING #eval ADD_TYPE
+#defeval VALUE_NUMBER #eval ADD_TYPE
+#defeval VALUE_STRING #eval ADD_TYPE
+#defeval VALUE_METHOD #eval ADD_TYPE
+#define KEY_TYPE 0
+#define ADD_KEY (#defeval KEY_TYPE (1 + KEY_TYPE)
+KEY_TYPE)
+//Classifying Prototype-based Programming Languages
+\#include <stdio.h>
+\#include <stdint.h>
+\#include <stdlib.h>
+
+\#define KEY_X #eval ADD_KEY
+
+\#define KEY_Y #eval ADD_KEY
+
+\#define KEY_NAME #eval ADD_KEY
+
+\#define KEY_ADD #eval ADD_KEY
+
+
+#define STRUCT Object
+AUTO_DEFINE;
+#define STRUCT Value
+AUTO_DEFINE;
+typedef Value (*Method) (Object self, Object parameter);
+
+#define STRUCT Value
+#define F_VALUE CONCAT(Value,#1)
+DEFINE_START
+    int8_t value_type;
+    union {
+        int64_t number;
+        char * string;
+        Method method;
+    };
+DEFINE_END;
+STRUCT NULL_VALUE = NULL;
+
+#define NEW_VALUE(new_name, base_type, new_value_type, assign) STRUCT F_VALUE(new_name) (base_type value) {\
+    STRUCT result = calloc(1, sizeof(STRUCT_NAME));\
+    result->value_type = new_value_type;\
+    result->assign = value;\
+    return result;\
+}
+NEW_VALUE(int,int64_t,VALUE_NUMBER,number)
+NEW_VALUE(string,char *,VALUE_STRING,string)
+NEW_VALUE(method,Method,VALUE_METHOD,method)
+
+
+void F_VALUE(free) (STRUCT value) {
+    switch (value->value_type) {
+        case VALUE_NUMBER:
+            printf("free %ld\\n", value->number);
+            break;
+        case VALUE_STRING:
+            printf("free %s\\n", value->string);
+            break;
+        case VALUE_METHOD:
+            printf("free method\\n");
+            break;
+        default:
+            break;
+    }
+    free(value);
+}
+
+
+#define STRUCT Slot
+#define F_SLOT CONCAT(Slot,#1)
+DEFINE_START
+    int64_t key;
+    Value value;
+    STRUCT_NAME *next;
+DEFINE_END;
+
+
+#define NEW_SLOT(new_name, base_type) STRUCT F_SLOT(new_name) (int64_t key, base_type value) {\
+    Value result_value = F_VALUE(new_name)(value);\
+    STRUCT result = calloc(1, sizeof(STRUCT_NAME));\
+    result->key = key;\
+    result->value = result_value;\
+    return result;\
+}
+NEW_SLOT(int, int64_t)
+NEW_SLOT(string, char *)
+NEW_SLOT(method, Method)
+
+
+STRUCT F_SLOT(free) (STRUCT slot) {
+    STRUCT next = slot->next;
+    F_VALUE(free)(slot->value);
+    free(slot);
+    return next;
+}
+
+
+#define STRUCT Object
+#define F_OBJECT CONCAT(Object,#1)
+DEFINE_START
+    Slot first;
+    STRUCT_NAME *parrent;
+DEFINE_END;
+
+
+void F_OBJECT(set)(Object self, Slot slot) {
+    Slot prev = NULL;
+    Slot current = NULL;
+    if (self->first == NULL) {
+        self->first = slot;
+        return;
+    }
+    else {
+        current = self->first;
+        while (current != NULL) {
+            if (slot->key < current->key) {
+                if (prev == NULL) {
+                    self->first = slot;
+                    slot->next = current;
+                }
+                else {
+                    slot->next = prev->next;
+                    prev->next = slot;
+                }
+                return;
+            }
+            else if (slot->key == current->key) {
+                if (prev == NULL) {
+                    self->first = slot;
+                    slot->next = current->next;
+                }
+                else {
+                    slot->next = current->next;
+                    prev->next = slot;
+                }
+                current->next = NULL;
+                F_SLOT(free)(current);
+                return;
+            }
+            else {
+                prev = current;
+                current = prev->next;
+            }
+        }
+        prev->next = slot;
+    }
+}
+
+
+Value F_OBJECT(get)(Object self, int64_t key) {
+    Slot current = self->first;
+    while (current != NULL) {
+        if (current->key == key) {
+            return current->value;
+        }
+        current = current->next;
+    }
+    if (self->parrent != NULL) {
+        return F_OBJECT(get)(self->parrent, key);
+    }
+    return NULL_VALUE;
+}
+
+
+Object F_OBJECT(create)(void) {
+    Object self = calloc(1, sizeof(STRUCT_NAME));
+    self->parrent = NULL;
+    self->first = NULL;
+    printf("init\\n");
+    return self;
+}
+
+
+Object F_OBJECT(extend)(Object from) {
+    Object self = F_OBJECT(create)();
+    self->parrent = from;
+    printf("extend\\n");
+    return self;
+}
+
+
+void F_OBJECT(free)(Object self) {
+    printf("free\\n");
+    Slot current = self->first;
+    while (current != NULL) {
+        current = F_SLOT(free)(current);
+    }
+    free(self);
+}
+
+
+Value method_add_self(Object self, Object parameter) {
+    int64_t x = F_OBJECT(get)(self, KEY_X)->number;
+    int64_t y = F_OBJECT(get)(self, KEY_Y)->number;
+    return F_VALUE(int)(x + y);
+}
+
+Value method_add_parameter(Object self, Object parameter) {
+    int64_t x = F_OBJECT(get)(parameter, KEY_X)->number;
+    int64_t y = F_OBJECT(get)(parameter, KEY_Y)->number;
+    return F_VALUE(int)(x + y);
+}
+
+
+void test_method_with_parameter(void) {
+    Object parameter = F_OBJECT(create)();
+    Object self = F_OBJECT(create)();
+
+    F_OBJECT(set)(parameter, F_SLOT(int)(KEY_X, 1));
+    F_OBJECT(set)(parameter, F_SLOT(int)(KEY_Y, 2));
+    F_OBJECT(set)(self, F_SLOT(method)(KEY_ADD, &method_add_parameter));
+
+    Value result = F_OBJECT(get)(self, KEY_ADD)->method(self, parameter);
+    printf("method test: %ld\\n", result->number);
+    F_VALUE(free)(result);
+
+    F_OBJECT(free)(self);
+    F_OBJECT(free)(parameter);
+}
+
+
+void test_method_with_self(void) {
+    Object parameter = F_OBJECT(create)();
+    Object self = F_OBJECT(create)();
+
+    F_OBJECT(set)(self, F_SLOT(int)(KEY_X, 1));
+    F_OBJECT(set)(self, F_SLOT(int)(KEY_Y, 2));
+    F_OBJECT(set)(self, F_SLOT(method)(KEY_ADD, &method_add_self));
+
+    Value result = F_OBJECT(get)(self, KEY_ADD)->method(self, parameter);
+    printf("method test: %ld\\n", result->number);
+    F_VALUE(free)(result);
+
+    F_OBJECT(free)(self);
+    F_OBJECT(free)(parameter);
+}
+
+
+void test_extend(void) {
+    Object self = F_OBJECT(create)();
+
+    F_OBJECT(set)(self, F_SLOT(int)(KEY_X, 30));
+    Object other = F_OBJECT(extend)(self);
+    F_OBJECT(set)(self, F_SLOT(int)(KEY_Y, 10));
+
+    printf("other get x: %ld\\n",F_OBJECT(get)(other, KEY_X)->number);
+    printf("other get y: %ld\\n",F_OBJECT(get)(other, KEY_Y)->number);
+
+    F_OBJECT(free)(other);
+    F_OBJECT(free)(self);
+}
+
+
+void test_set_new_value(void) {
+    Object self = F_OBJECT(create)();
+
+    F_OBJECT(set)(self, F_SLOT(int)(KEY_X, 30));
+    Object other = F_OBJECT(extend)(self);
+    F_OBJECT(set)(self, F_SLOT(int)(KEY_Y, 10));
+    F_OBJECT(set)(other, F_SLOT(int)(KEY_X, 20));
+
+    printf("self get x: %ld\\n",F_OBJECT(get)(self, KEY_X)->number);
+    printf("other get x: %ld\\n",F_OBJECT(get)(other, KEY_X)->number);
+    printf("self get y: %ld\\n",F_OBJECT(get)(self, KEY_Y)->number);
+    printf("other get y: %ld\\n",F_OBJECT(get)(other, KEY_Y)->number);
+
+    F_OBJECT(free)(other);
+    F_OBJECT(free)(self);
+}
+
+
+void test_string(void) {
+    Object self = F_OBJECT(create)();
+
+    F_OBJECT(set)(self, F_SLOT(string)(KEY_NAME, "hello"));
+    printf("self get: %s\\n",F_OBJECT(get)(self, KEY_NAME)->string);
+
+    F_OBJECT(free)(self);
+}
+
+
+int main(void) {
+    test_method_with_self();
+    test_method_with_parameter();
+    test_extend();
+    test_set_new_value();
+    test_string();
+}
