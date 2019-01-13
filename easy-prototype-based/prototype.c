@@ -7,8 +7,9 @@
 #define KEY_Y 2
 #define KEY_NAME 3
 #define KEY_ADD 4
-
+#define KEY_OBJECT 5
 typedef struct Object * Object;
+void Object_free(Object self);
 typedef struct Value * Value;
 typedef Value (*Method) (Object self, Object parameter);
 
@@ -18,40 +19,51 @@ typedef struct Value {
         int64_t number;
         char * string;
         Method method;
+        Object object;
     };
 } * Value;
 Value NULL_VALUE = NULL;
 
 Value Value_int (int64_t value) {
     Value result = calloc(1, sizeof(struct Value));
-    result->value_type = 1;
+    result->value_type = 2;
     result->number = value;
     return result;
 }
 Value Value_string (char * value) {
     Value result = calloc(1, sizeof(struct Value));
-    result->value_type = 2;
+    result->value_type = 3;
     result->string = value;
     return result;
 }
 Value Value_method (Method value) {
     Value result = calloc(1, sizeof(struct Value));
-    result->value_type = 3;
+    result->value_type = 4;
     result->method = value;
+    return result;
+}
+Value Value_object (Object value) {
+    Value result = calloc(1, sizeof(struct Value));
+    result->value_type = 1;
+    result->object = value;
     return result;
 }
 
 
 void Value_free (Value value) {
     switch (value->value_type) {
-        case 1:
+        case 2:
             printf("free %ld\n", value->number);
             break;
-        case 2:
+        case 3:
             printf("free %s\n", value->string);
             break;
-        case 3:
+        case 4:
             printf("free method\n");
+            break;
+        case 1:
+            printf("free object\n");
+            Object_free(value->object);
             break;
         default:
             break;
@@ -83,6 +95,13 @@ Slot Slot_string (int64_t key,  char * value) {
 }
 Slot Slot_method (int64_t key,  Method value) {
     Value result_value = Value_method(value);
+    Slot result = calloc(1, sizeof(struct Slot));
+    result->key = key;
+    result->value = result_value;
+    return result;
+}
+Slot Slot_object (int64_t key,  Object value) {
+    Value result_value = Value_object(value);
     Slot result = calloc(1, sizeof(struct Slot));
     result->key = key;
     result->value = result_value;
@@ -202,6 +221,12 @@ Value method_add_parameter(Object self, Object parameter) {
     return Value_int(x + y);
 }
 
+Value method_add_object(Object self, Object parameter) {
+    Object test = Object_get(self, KEY_OBJECT)->object;
+    int64_t x = Object_get(test, KEY_X)->number;
+    int64_t y = Object_get(test, KEY_Y)->number;
+    return Value_int(x + y);
+}
 
 void test_method_with_parameter(void) {
     Object parameter = Object_create();
@@ -227,6 +252,25 @@ void test_method_with_self(void) {
     Object_set(self, Slot_int(KEY_X, 1));
     Object_set(self, Slot_int(KEY_Y, 2));
     Object_set(self, Slot_method(KEY_ADD, &method_add_self));
+
+    Value result = Object_get(self, KEY_ADD)->method(self, parameter);
+    printf("method test: %ld\n", result->number);
+    Value_free(result);
+
+    Object_free(self);
+    Object_free(parameter);
+}
+
+
+void test_method_with_object(void) {
+    Object parameter = Object_create();
+    Object other = Object_create();
+    Object self = Object_create();
+
+    Object_set(other, Slot_int(KEY_X, 1));
+    Object_set(other, Slot_int(KEY_Y, 2));
+    Object_set(self, Slot_method(KEY_ADD, &method_add_object));
+    Object_set(self, Slot_object(KEY_OBJECT, other));
 
     Value result = Object_get(self, KEY_ADD)->method(self, parameter);
     printf("method test: %ld\n", result->number);
@@ -283,6 +327,9 @@ void test_string(void) {
 int main(void) {
     test_method_with_self();
     test_method_with_parameter();
+    printf("test add object\n");
+    test_method_with_object();
+    printf("test extend\n");
     test_extend();
     test_set_new_value();
     test_string();

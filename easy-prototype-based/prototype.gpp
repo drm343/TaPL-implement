@@ -7,6 +7,7 @@
 #define ADD_TYPE (#defeval VALUE_TYPE (1 + VALUE_TYPE)
 VALUE_TYPE)
 #defeval VALUE_NOTHING #eval ADD_TYPE
+#defeval VALUE_OBJECT #eval ADD_TYPE
 #defeval VALUE_NUMBER #eval ADD_TYPE
 #defeval VALUE_STRING #eval ADD_TYPE
 #defeval VALUE_METHOD #eval ADD_TYPE
@@ -26,9 +27,12 @@ KEY_TYPE)
 
 \#define KEY_ADD #eval ADD_KEY
 
+\#define KEY_OBJECT #eval ADD_KEY
 
 #define STRUCT Object
+#define F_OBJECT CONCAT(Object,#1)
 AUTO_DEFINE;
+void F_OBJECT(free)(Object self);
 #define STRUCT Value
 AUTO_DEFINE;
 typedef Value (*Method) (Object self, Object parameter);
@@ -41,6 +45,7 @@ DEFINE_START
         int64_t number;
         char * string;
         Method method;
+        Object object;
     };
 DEFINE_END;
 STRUCT NULL_VALUE = NULL;
@@ -54,6 +59,7 @@ STRUCT NULL_VALUE = NULL;
 NEW_VALUE(int,int64_t,VALUE_NUMBER,number)
 NEW_VALUE(string,char *,VALUE_STRING,string)
 NEW_VALUE(method,Method,VALUE_METHOD,method)
+NEW_VALUE(object,Object,VALUE_OBJECT,object)
 
 
 void F_VALUE(free) (STRUCT value) {
@@ -66,6 +72,10 @@ void F_VALUE(free) (STRUCT value) {
             break;
         case VALUE_METHOD:
             printf("free method\\n");
+            break;
+        case VALUE_OBJECT:
+            printf("free object\\n");
+            F_OBJECT(free)(value->object);
             break;
         default:
             break;
@@ -93,6 +103,7 @@ DEFINE_END;
 NEW_SLOT(int, int64_t)
 NEW_SLOT(string, char *)
 NEW_SLOT(method, Method)
+NEW_SLOT(object, Object)
 
 
 STRUCT F_SLOT(free) (STRUCT slot) {
@@ -209,6 +220,12 @@ Value method_add_parameter(Object self, Object parameter) {
     return F_VALUE(int)(x + y);
 }
 
+Value method_add_object(Object self, Object parameter) {
+    Object test = F_OBJECT(get)(self, KEY_OBJECT)->object;
+    int64_t x = F_OBJECT(get)(test, KEY_X)->number;
+    int64_t y = F_OBJECT(get)(test, KEY_Y)->number;
+    return F_VALUE(int)(x + y);
+}
 
 void test_method_with_parameter(void) {
     Object parameter = F_OBJECT(create)();
@@ -234,6 +251,25 @@ void test_method_with_self(void) {
     F_OBJECT(set)(self, F_SLOT(int)(KEY_X, 1));
     F_OBJECT(set)(self, F_SLOT(int)(KEY_Y, 2));
     F_OBJECT(set)(self, F_SLOT(method)(KEY_ADD, &method_add_self));
+
+    Value result = F_OBJECT(get)(self, KEY_ADD)->method(self, parameter);
+    printf("method test: %ld\\n", result->number);
+    F_VALUE(free)(result);
+
+    F_OBJECT(free)(self);
+    F_OBJECT(free)(parameter);
+}
+
+
+void test_method_with_object(void) {
+    Object parameter = F_OBJECT(create)();
+    Object other = F_OBJECT(create)();
+    Object self = F_OBJECT(create)();
+
+    F_OBJECT(set)(other, F_SLOT(int)(KEY_X, 1));
+    F_OBJECT(set)(other, F_SLOT(int)(KEY_Y, 2));
+    F_OBJECT(set)(self, F_SLOT(method)(KEY_ADD, &method_add_object));
+    F_OBJECT(set)(self, F_SLOT(object)(KEY_OBJECT, other));
 
     Value result = F_OBJECT(get)(self, KEY_ADD)->method(self, parameter);
     printf("method test: %ld\\n", result->number);
@@ -290,6 +326,9 @@ void test_string(void) {
 int main(void) {
     test_method_with_self();
     test_method_with_parameter();
+    printf("test add object\\n");
+    test_method_with_object();
+    printf("test extend\\n");
     test_extend();
     test_set_new_value();
     test_string();
